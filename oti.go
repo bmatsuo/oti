@@ -13,6 +13,7 @@ instances. For usage information pass oti the -h flag.
 package main
 
 import (
+	"github.com/bmatsuo/oti/oticonfig"
 	"github.com/bmatsuo/oti/otisub"
 
 	"flag"
@@ -25,7 +26,7 @@ var OTIAgent = "oti"
 
 // default configuration informatio
 var ConfigPath = "oti.json"
-var Config = &OTIConfig{
+var Config = &oticonfig.C{
 	AwsKeyPath: "aws_credentials.json",
 	TagPrefix:  "co.bmats.oti.",
 }
@@ -59,7 +60,7 @@ func main() {
 		Log.Fatal("for a list of commands run oti -h")
 	}
 
-	err := readConfig(ConfigPath, Config)
+	err := oticonfig.Read(ConfigPath, Config)
 	if err != nil {
 		if os.IsNotExist(err) {
 			Log.Println("warning: config file not found. using defaults.")

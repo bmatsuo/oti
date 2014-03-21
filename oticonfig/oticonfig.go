@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// config.go [created: Thu, 20 Mar 2014]
+// oticonfig.go [created: Thu, 20 Mar 2014]
 
-package main
+package oticonfig
 
 import (
 	"github.com/bmatsuo/go-jsontree"
@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-type OTIConfig struct {
+type C struct {
 	AwsKeyPath string // file containing an AwsKey json object
 	PackerDir  string // directory containing packer files (w/ .json extension)
 	TagPrefix  string // namespace for tag keys used by oti.
@@ -24,7 +24,7 @@ type OTIConfig struct {
 
 type OTITag struct{ Key, Value string }
 
-func readConfig(path string, c *OTIConfig) error {
+func Read(path string, c *C) error {
 	configp, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func readConfig(path string, c *OTIConfig) error {
 	return nil
 }
 
-func (c *OTIConfig) AwsKey() (*AwsKey, error) {
+func (c *C) AwsKey() (*AwsKey, error) {
 	// TODO stat and warn if permissions are not strict
 
 	keyp, err := ioutil.ReadFile(c.AwsKeyPath)
@@ -61,7 +61,7 @@ func (c *OTIConfig) AwsKey() (*AwsKey, error) {
 	return &k, nil
 }
 
-func (c *OTIConfig) Packer(name string) (*Packer, error) {
+func (c *C) Packer(name string) (*Packer, error) {
 	var p Packer
 	pp, err := ioutil.ReadFile(filepath.Join(c.PackerDir, name+".json"))
 	if err != nil {
@@ -76,7 +76,7 @@ func (c *OTIConfig) Packer(name string) (*Packer, error) {
 	return &p, nil
 }
 
-func (c *OTIConfig) Packers() ([]string, error) {
+func (c *C) Packers() ([]string, error) {
 	ps, err := filepath.Glob(filepath.Join(c.PackerDir, "*.json"))
 	if err != nil {
 		return nil, err
