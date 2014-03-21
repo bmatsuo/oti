@@ -14,11 +14,15 @@ import (
 	"os"
 )
 
+var OTIVersion = "0.1"
+var OTIAgent = "oti"
+
 // default configuration informatio
 var ConfigPath = "oti.json"
 var Config = &OTIConfig{
 	AwsKeyPath:  "aws_credentials.json",
-	ResourceTag: OTITag{"ManagingAgent", "oti"},
+	ResourceTag: OTITag{"UserAgent", OTIAgent + "/" + OTIVersion},
+	ResourceTag: OTITag{"User", OTIAgent + "/" + OTIVersion},
 }
 
 var Log = log.New(os.Stderr, "", 0)

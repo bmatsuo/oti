@@ -7,13 +7,17 @@
 package main
 
 import (
+	"github.com/bmatsuo/go-jsontree"
+
 	"encoding/json"
 	"io/ioutil"
 )
 
 type OTIConfig struct {
-	AwsKeyPath  string
-	ResourceTag OTITag
+	AwsKeyPath string // file containing an AwsKey json object
+	PackerDir  string // directory containing packer files (w/ .json extension)
+	Identity   OTITag // tag identifying this oti install (e.g. "eric's pc")
+	Agent      OTITag // tag to put on all resources managed by oti
 }
 
 type OTITag struct{ Key, Value string }
@@ -47,7 +51,28 @@ func (c *OTIConfig) AwsKey() (*AwsKey, error) {
 	return &k, nil
 }
 
+func (c *OTIConfig) Packer(name string) (*Packer, error) {
+	var p Packer
+	pp, err := ioutil.ReadFile(c.AwsKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(pp, &p)
+	if err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+}
+
 type AwsKey struct {
 	AccessKey string
 	SecretKey string
+}
+
+type Packer struct {
+	Vars         *jsontree.JsonTree
+	Builders     []*jsontree.JsonTree
+	Provisioners []*jsontree.JsonTree
 }

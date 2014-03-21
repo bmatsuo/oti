@@ -1,8 +1,23 @@
 package otisub
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"sort"
+	"strings"
 )
+
+var Program = os.Args[0]
+
+func Usage(subname string, args ...string) func() {
+	return func() {
+		fmt.Fprintf(os.Stderr, "usage: %v %v [options] %v\n",
+			Program, subname, strings.Join(args, " "))
+		fmt.Fprintln(os.Stderr, "options:")
+		flag.PrintDefaults()
+	}
+}
 
 type Interface interface {
 	Name() string

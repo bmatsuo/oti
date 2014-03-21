@@ -9,9 +9,13 @@ package main
 import (
 	"github.com/bmatsuo/oti/otisub"
 
+	"flag"
 	"fmt"
 )
 
 var lifecycle = otisub.Register("lifecycle", func(args []string) {
+	flag.Usage = otisub.Usage("lifecycle")
+	flag.Parse()
+
 	fmt.Println("The circle of life.")
 })

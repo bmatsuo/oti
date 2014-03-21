@@ -9,9 +9,13 @@ package main
 import (
 	"github.com/bmatsuo/oti/otisub"
 
+	"flag"
 	"fmt"
 )
 
 var launch = otisub.Register("launch", func(args []string) {
+	flag.Usage = otisub.Usage("launch")
+	flag.Parse()
+
 	fmt.Println("LAUNCH!")
 })
