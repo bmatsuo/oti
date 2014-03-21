@@ -14,13 +14,18 @@ import (
 	"os"
 )
 
+// default configuration informatio
+var ConfigPath = "oti.json"
+var Config = &OTIConfig{
+	AwsKeyPath:  "aws_credentials.json",
+	ResourceTag: OTITag{"ManagingAgent", "oti"},
+}
+
 func main() {
 	logger := log.New(os.Stderr, "", 0)
-	opts := new(struct {
-		configpath string
-	})
+
 	fs := flag.NewFlagSet("oti", flag.ExitOnError)
-	fs.StringVar(&opts.configpath, "c", "oti.json", "config file location")
+	fs.StringVar(&ConfigPath, "c", ConfigPath, "config file location")
 	fs.Usage = func() {
 		logger.Println("usage: oti [options] command")
 		logger.Println()
@@ -43,6 +48,16 @@ func main() {
 		logger.Printf("no command %q; exiting", cmdname)
 		logger.Fatal("for a list of commands run oti -h")
 	}
+
+	err := readConfig(ConfigPath, Config)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Println("warning: config file not found. using defaults.")
+		} else {
+			logger.Fatal("error reading config: ", err)
+		}
+	}
+
 	cmd.Main(args)
 }
 
