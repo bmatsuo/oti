@@ -5,10 +5,51 @@
 // oti.go [created: Thu, 20 Mar 2014]
 
 /*
-The oti command provides a set of utilities for working with short-lived AWS
-instances. For usage information pass oti the -h flag.
+the oti command provides a set of utilities for working with short-lived
+instances on ec2.
+
+
+Command usage
+
+for basic usage details pass the -h flag to the oti command.
 
 	oti -h
+
+
+Configuration
+
+see the "oticonfig" subpackage for configuration documentation.
+
+
+Launch instances
+
+the "launch" command can be used to spin up one or more new ec2 instances.
+
+	oti launch -h
+
+
+Terminate instances
+
+the "terminate" command can be used to terminate one or more ec2 instances.
+
+	oti terminate -h
+
+
+Inspect images and instances
+
+the "inspect" command provides information on available images and instances
+running those images.
+
+	oti inspect -h
+
+
+Instance lifecycle
+
+run a full lifecycle for one or more instances durig the lifetime of the
+oti process.
+
+	oti lifecycle -h
+
 */
 package main
 

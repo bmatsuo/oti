@@ -4,6 +4,10 @@
 
 // oticonfig.go [created: Thu, 20 Mar 2014]
 
+/*
+configuration for oti.
+
+*/
 package oticonfig
 
 import (
@@ -16,14 +20,14 @@ import (
 	"strings"
 )
 
+// configuration for
 type C struct {
-	AwsKeyPath string // file containing an AwsKey json object
-	PackerDir  string // directory containing packer files (w/ .json extension)
-	TagPrefix  string // namespace for tag keys used by oti.
+	AwsKeyPath string // see func (c *C) AwsKey()
+	PackerDir  string // see func (c *C) Packer(string)
+	TagPrefix  string // prefix for tag keys used by oti.
 }
 
-type OTITag struct{ Key, Value string }
-
+// unmarshal json data stored at path into c. any error encountered is returned.
 func Read(path string, c *C) error {
 	configp, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -36,6 +40,8 @@ func Read(path string, c *C) error {
 	return nil
 }
 
+// unmarshal the json data stored in c.AwsKeyPath into a new AwsKey. return
+// any error encountered.
 func (c *C) AwsKey() (*AwsKey, error) {
 	// TODO stat and warn if permissions are not strict
 
@@ -61,9 +67,12 @@ func (c *C) AwsKey() (*AwsKey, error) {
 	return &k, nil
 }
 
+// unmarshal a packer file by name. see c.Packers() for details about
+// names.
 func (c *C) Packer(name string) (*Packer, error) {
 	var p Packer
-	pp, err := ioutil.ReadFile(filepath.Join(c.PackerDir, name+".json"))
+	ppath := filepath.Join(c.PackerDir, name+".json")
+	pp, err := ioutil.ReadFile(ppath)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +85,8 @@ func (c *C) Packer(name string) (*Packer, error) {
 	return &p, nil
 }
 
+// return the name of packer manifests in c.PackerDir. the name of the
+// manifest is the file basename (without the ".json" extension).
 func (c *C) Packers() ([]string, error) {
 	ps, err := filepath.Glob(filepath.Join(c.PackerDir, "*.json"))
 	if err != nil {
