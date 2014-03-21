@@ -12,6 +12,7 @@ package oticonfig
 
 import (
 	"github.com/bmatsuo/go-jsontree"
+	"github.com/bmatsuo/oti/otitag"
 
 	"encoding/json"
 	"fmt"
@@ -22,9 +23,9 @@ import (
 
 // configuration for
 type C struct {
-	AwsKeyPath string // see func (c *C) AwsKey()
-	PackerDir  string // see func (c *C) Packer(string)
-	TagPrefix  string // prefix for tag keys used by oti.
+	AwsKeyPath   string // see func (c *C) AwsKey()
+	PackerDir    string // see func (c *C) Packer(string)
+	Ec2TagPrefix string // see func (c *C) EC2Tag(otitag.OTITag)
 }
 
 // unmarshal json data stored at path into c. any error encountered is returned.
@@ -38,6 +39,11 @@ func Read(path string, c *C) error {
 		return err
 	}
 	return nil
+}
+
+// returns name prefixed with c.TagPrefix
+func (c *C) Ec2Tag(tag otitag.OTITag) string {
+	return c.Ec2TagPrefix + string(tag)
 }
 
 // unmarshal the json data stored in c.AwsKeyPath into a new AwsKey. return
