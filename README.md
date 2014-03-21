@@ -1,5 +1,7 @@
 [godoc.org]: http://godoc.org/github.com/bmatsuo/oti "godoc.org"
 
+One-time instances
+
 ##Install
 
     go get github.com/bmatsuo/oti

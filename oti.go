@@ -6,8 +6,28 @@
 
 package main
 
-import "fmt"
+import (
+	"github.com/bmatsuo/oti/otisub"
+
+	"flag"
+	"fmt"
+	"os"
+)
 
 func main() {
-    fmt.Println("Hello, Bryan Matsuo!")
+	flag.Parse()
+	cmdname, args := getargs("lifecycle")
+	cmd := otisub.Get(cmdname)
+	if cmd == nil {
+		fmt.Fprintf(os.Stderr, "no such command: %q\n", cmdname)
+	}
+	cmd.Main(args)
+}
+
+func getargs(defcmd string, defargs ...string) (subcmd string, subargs []string) {
+	args := flag.Args()
+	if len(args) == 0 {
+		return defcmd, defargs
+	}
+	return args[0], args[1:]
 }
