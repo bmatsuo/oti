@@ -20,15 +20,15 @@ var OTIAgent = "oti"
 // default configuration informatio
 var ConfigPath = "oti.json"
 var Config = &OTIConfig{
-	AwsKeyPath:  "aws_credentials.json",
-	ResourceTag: OTITag{"UserAgent", OTIAgent + "/" + OTIVersion},
-	ResourceTag: OTITag{"User", OTIAgent + "/" + OTIVersion},
+	AwsKeyPath: "aws_credentials.json",
+	TagPrefix:  "co.bmats.oti.",
 }
 
 var Log = log.New(os.Stderr, "", 0)
 
 func main() {
 	fs := flag.NewFlagSet("oti", flag.ExitOnError)
+	fs.StringVar(&Config.PackerDir, "p", Config.PackerDir, "packer file directory")
 	fs.StringVar(&ConfigPath, "c", ConfigPath, "config file location")
 	fs.Usage = func() {
 		Log.Println("usage: oti [options] command")

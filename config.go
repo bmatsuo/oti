@@ -10,14 +10,16 @@ import (
 	"github.com/bmatsuo/go-jsontree"
 
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"path/filepath"
+	"strings"
 )
 
 type OTIConfig struct {
 	AwsKeyPath string // file containing an AwsKey json object
 	PackerDir  string // directory containing packer files (w/ .json extension)
-	Identity   OTITag // tag identifying this oti install (e.g. "eric's pc")
-	Agent      OTITag // tag to put on all resources managed by oti
+	TagPrefix  string // namespace for tag keys used by oti.
 }
 
 type OTITag struct{ Key, Value string }
@@ -48,12 +50,20 @@ func (c *OTIConfig) AwsKey() (*AwsKey, error) {
 		return nil, err
 	}
 
+	if k.AccessKey == "" {
+		return nil, fmt.Errorf("missing AccessKey")
+	}
+
+	if k.SecretKey == "" {
+		return nil, fmt.Errorf("missing SecretKey")
+	}
+
 	return &k, nil
 }
 
 func (c *OTIConfig) Packer(name string) (*Packer, error) {
 	var p Packer
-	pp, err := ioutil.ReadFile(c.AwsKeyPath)
+	pp, err := ioutil.ReadFile(filepath.Join(c.PackerDir, name+".json"))
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +74,17 @@ func (c *OTIConfig) Packer(name string) (*Packer, error) {
 	}
 
 	return &p, nil
+}
+
+func (c *OTIConfig) Packers() ([]string, error) {
+	ps, err := filepath.Glob(filepath.Join(c.PackerDir, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	for i := range ps {
+		ps[i] = strings.TrimSuffix(filepath.Base(ps[i]), ".json")
+	}
+	return ps, nil
 }
 
 type AwsKey struct {
