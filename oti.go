@@ -10,22 +10,43 @@ import (
 	"github.com/bmatsuo/oti/otisub"
 
 	"flag"
-	"fmt"
+	"log"
 	"os"
 )
 
 func main() {
-	flag.Parse()
-	cmdname, args := getargs("lifecycle")
+	logger := log.New(os.Stderr, "", 0)
+	opts := new(struct {
+		configpath string
+	})
+	fs := flag.NewFlagSet("oti", flag.ExitOnError)
+	fs.StringVar(&opts.configpath, "c", "oti.json", "config file location")
+	fs.Usage = func() {
+		logger.Println("usage: oti [options] command")
+		logger.Println()
+		logger.Println("options:")
+		fs.PrintDefaults()
+		logger.Println()
+		logger.Println("commands:")
+		for _, cmd := range otisub.GetAll() {
+			logger.Print("\t", cmd.Name())
+		}
+		logger.Println()
+		logger.Println("for details about a specific command:")
+		logger.Println("\toti command -h")
+	}
+	fs.Parse(os.Args[1:])
+
+	cmdname, args := getargs(fs.Args(), "lifecycle")
 	cmd := otisub.Get(cmdname)
 	if cmd == nil {
-		fmt.Fprintf(os.Stderr, "no such command: %q\n", cmdname)
+		logger.Printf("no command %q; exiting", cmdname)
+		logger.Fatal("for a list of commands run oti -h")
 	}
 	cmd.Main(args)
 }
 
-func getargs(defcmd string, defargs ...string) (subcmd string, subargs []string) {
-	args := flag.Args()
+func getargs(args []string, defcmd string, defargs ...string) (subcmd string, subargs []string) {
 	if len(args) == 0 {
 		return defcmd, defargs
 	}

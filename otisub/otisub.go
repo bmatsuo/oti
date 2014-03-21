@@ -1,5 +1,9 @@
 package otisub
 
+import (
+	"sort"
+)
+
 type Interface interface {
 	Name() string
 	Main(args []string)
@@ -26,6 +30,23 @@ func regsub(subname string, step Interface) {
 		panic("already registered")
 	}
 	m[subname] = step
+}
+
+type isort []Interface
+
+func (is isort) Len() int           { return len(is) }
+func (is isort) Less(i, j int) bool { return is[i].Name() < is[j].Name() }
+func (is isort) Swap(i, j int)      { is[i], is[j] = is[j], is[i] }
+
+func GetAll() []Interface {
+	m := <-subreg
+	defer func() { subreg <- m }()
+	subs := make([]Interface, 0, len(m))
+	for _, s := range m {
+		subs = append(subs, s)
+	}
+	sort.Sort(isort(subs))
+	return subs
 }
 
 func Get(subname string) Interface {
