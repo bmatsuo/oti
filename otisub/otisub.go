@@ -10,12 +10,27 @@ import (
 
 var Program = os.Args[0]
 
+func FlagSet(eh flag.ErrorHandling, subname string, args ...string) *flag.FlagSet {
+	name := fmt.Sprintf("%v %v", Program, subname)
+	fs := flag.NewFlagSet(name, eh)
+	fs.Usage = usage(fs, subname, args)
+	return fs
+}
+
 func Usage(subname string, args ...string) func() {
+	return usage(nil, subname, args)
+}
+
+func usage(fs *flag.FlagSet, subname string, args []string) func() {
 	return func() {
 		fmt.Fprintf(os.Stderr, "usage: %v %v [options] %v\n",
 			Program, subname, strings.Join(args, " "))
 		fmt.Fprintln(os.Stderr, "options:")
-		flag.PrintDefaults()
+		if fs == nil {
+			flag.PrintDefaults()
+		} else {
+			fs.PrintDefaults()
+		}
 	}
 }
 
