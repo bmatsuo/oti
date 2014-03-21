@@ -1,3 +1,7 @@
+/*
+interact with packer. this parses packer's output. packer may be operated over
+ssh in the future.
+*/
 package packer
 
 import (

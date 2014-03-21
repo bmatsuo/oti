@@ -4,6 +4,12 @@
 
 // oti.go [created: Thu, 20 Mar 2014]
 
+/*
+The oti command provides a set of utilities for working with short-lived AWS
+instances. For usage information pass oti the -h flag.
+
+	oti -h
+*/
 package main
 
 import (

@@ -1,3 +1,6 @@
+/*
+a generic subcommand implementation for oti.
+*/
 package otisub
 
 import (
