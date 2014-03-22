@@ -7,13 +7,13 @@ type OTITag string
 
 var Tags = []OTITag{
 	ResourceId,
-	Target,
+	SessionId,
 	Created,
 }
 
 const (
 	ResourceId OTITag = "ResourceId" // a unique identifier for the resource.
-	Target     OTITag = "Target"     // an identifier that groups resources.
+	SessionId  OTITag = "SessionId"  // an identifier that groups oti resources.
 	Created    OTITag = "Created"    // an timestamp in RFC3339 format.
 )
 
@@ -23,12 +23,37 @@ var InstanceTags = []OTITag{
 }
 
 const (
-	IImageId OTITag = "ImageId"
+	IImageId OTITag = "Instance.ImageId" // ResourceId of a machine image
+)
+
+// tags present only on instances
+var ImageTags = []OTITag{
+	ImType,
+}
+
+const (
+	ImType OTITag = "Image.Type" // ResourceId of a machine image
 )
 
 // returns all tags; Tags, InstanceTags, etc.
 func AllTags() []OTITag {
-	return append(append([]OTITag{},
-		Tags...),
-		InstanceTags...)
+	return concat(
+		Tags,
+		InstanceTags,
+		ImageTags,
+	)
+}
+
+func concat(ts ...[]OTITag) []OTITag {
+	if len(ts) == 0 {
+		return nil
+	}
+
+	var _ts []OTITag
+
+	for i := range ts {
+		_ts = append(_ts, ts[i]...)
+	}
+
+	return _ts
 }

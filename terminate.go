@@ -85,7 +85,7 @@ func TerminateMain(targets []string, opts *TerminateOptions) {
 	}
 }
 
-// find instances tagged with the given target ids
+// find instances tagged with target session ids
 func LocateTargetInstances(ec2 *awsec2.EC2, targets []string) ([]awsec2.Reservation, error) {
 	if ec2 == nil {
 		panic("nil ec2 connection")
@@ -97,7 +97,7 @@ func LocateTargetInstances(ec2 *awsec2.EC2, targets []string) ([]awsec2.Reservat
 
 	filter := awsec2.NewFilter()
 	for i := range targets {
-		filter.Add("tag:"+Config.Ec2Tag(otitag.Target), targets[i])
+		filter.Add("tag:"+Config.Ec2Tag(otitag.SessionId), targets[i])
 	}
 
 	resp, err := ec2.DescribeInstances(nil, filter)
