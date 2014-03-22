@@ -4,6 +4,15 @@
 
 // inspect.go [created: Thu, 20 Mar 2014]
 
+/*
+Inspect images and instances
+
+the "inspect" command provides information on available images and instances
+running those images.
+
+	oti inspect -h
+
+*/
 package main
 
 import (

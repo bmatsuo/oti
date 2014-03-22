@@ -4,6 +4,15 @@
 
 // lifecycle.go [created: Thu, 20 Mar 2014]
 
+/*
+Instance lifecycle
+
+run a full lifecycle for one or more instances durig the lifetime of the
+oti process.
+
+	oti lifecycle -h
+
+*/
 package main
 
 import (

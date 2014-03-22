@@ -4,6 +4,14 @@
 
 // launch.go [created: Thu, 20 Mar 2014]
 
+/*
+Launch instances
+
+the "launch" command can be used to spin up one or more new ec2 instances.
+
+	oti launch -h
+
+*/
 package main
 
 import (
