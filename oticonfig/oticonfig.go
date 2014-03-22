@@ -13,6 +13,7 @@ package oticonfig
 import (
 	"github.com/bmatsuo/go-jsontree"
 	"github.com/bmatsuo/oti/otitag"
+	"github.com/crowdmob/goamz/aws"
 
 	"encoding/json"
 	"fmt"
@@ -44,6 +45,19 @@ func Read(path string, c *C) error {
 // returns name prefixed with c.TagPrefix
 func (c *C) Ec2Tag(tag otitag.OTITag) string {
 	return c.Ec2TagPrefix + string(tag)
+}
+
+// like c.AwsKey() but returns an aws.Auth type
+func (c *C) AwsAuth() (aws.Auth, error) {
+	key, err := c.AwsKey()
+	if err != nil {
+		return aws.Auth{}, err
+	}
+	auth := aws.Auth{
+		AccessKey: key.AccessKey,
+		SecretKey: key.SecretKey,
+	}
+	return auth, nil
 }
 
 // unmarshal the json data stored in c.AwsKeyPath into a new AwsKey. return
