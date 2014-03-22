@@ -78,7 +78,7 @@ func TerminateMain(targets []string, opts *TerminateOptions) {
 	}
 
 	for _, change := range resp.StateChanges {
-		Log.Println("%s %s (was %s)",
+		Log.Printf("%s %s (was %s)",
 			change.InstanceId,
 			change.CurrentState.Name,
 			change.PreviousState.Name)
@@ -107,17 +107,3 @@ func LocateTargetInstances(ec2 *awsec2.EC2, targets []string) ([]awsec2.Reservat
 
 	return resp.Reservations, nil
 }
-
-/*
-// find security groups tagged with the given target ids
-// TODO
-func LocateTargetSecurityGroups(ec2 *awsec2.EC2, targets []string) ([]awsec2.SecurityGroup, error) {
-	return nil, fmt.Errorf("unimplemented")
-}
-
-// find keypairs tagged with the supplied target ids.
-// TODO
-func CollectKeyPairs(is []awsec2.Instance) ([]awsec2.KeyPair, error) {
-	return nil, fmt.Errorf("unimplemented")
-}
-*/

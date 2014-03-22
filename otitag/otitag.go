@@ -12,9 +12,9 @@ var Tags = []OTITag{
 }
 
 const (
-	ResourceId OTITag = "ResourceId" // a unique identifier for the resource.
-	SessionId  OTITag = "SessionId"  // an identifier that groups oti resources.
-	Created    OTITag = "Created"    // an timestamp in RFC3339 format.
+	ResourceId  OTITag = "ResourceId"  // a unique identifier for the resource.
+	SessionId   OTITag = "SessionId"   // an identifier that groups oti resources.
+	Created     OTITag = "Created"     // an timestamp in RFC3339 format.
 )
 
 // tags present only on instances
