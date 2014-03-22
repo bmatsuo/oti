@@ -23,8 +23,10 @@ import (
 )
 
 var lifecycle = otisub.Register("lifecycle", func(args []string) {
-	flag.Usage = otisub.Usage("lifecycle")
-	flag.Parse()
+	fs := otisub.FlagSet(flag.ExitOnError, "lifecycle", "imagename [directive ...] ...")
+	_ = fs.Bool("w", false, "wait while instances are 'shutting-down'")
+	fs.Parse(args)
+	args = fs.Args()
 
 	fmt.Println("The circle of life.")
 })
