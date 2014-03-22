@@ -15,6 +15,8 @@ import (
 	"os"
 )
 
+var DEBUG bool
+
 var OTIVersion = "0.1"
 var OTIAgent = "oti"
 
@@ -29,6 +31,7 @@ var Log = log.New(os.Stderr, "", 0)
 
 func main() {
 	fs := flag.NewFlagSet("oti", flag.ExitOnError)
+	fs.BoolVar(&DEBUG, "debug", false, "debug logging output")
 	fs.StringVar(&Config.PackerDir, "p", Config.PackerDir, "packer file directory")
 	fs.StringVar(&ConfigPath, "c", ConfigPath, "config file location")
 	fs.Usage = func() {

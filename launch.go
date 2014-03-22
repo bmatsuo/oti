@@ -29,7 +29,6 @@ import (
 
 var launch = otisub.Register("launch", func(args []string) {
 	fs := otisub.FlagSet(flag.ExitOnError, "inspect", "imagename [directive ...] ...")
-	//keypath := fs.String("i", "", "ssh key path")
 	sessionType := fs.String("s", "launch", "session type for management purposes")
 	waitPending := fs.Bool("w", false, "wait while instances are 'pending'")
 	fs.Parse(args)
@@ -63,22 +62,28 @@ var launch = otisub.Register("launch", func(args []string) {
 		mft.Ec2ImageId = images[0].Id
 	}
 
-	for _, m := range umfts {
-		Log.Printf("%#v", m)
+	if DEBUG {
+		for _, m := range umfts {
+			Log.Printf("%#v", m)
+		}
 	}
 
 	sessionId, err := NewSessionId(*sessionType)
 	if err != nil {
 		Log.Fatal(err)
 	}
-	Log.Println("oti session id: ", sessionId)
+
+	Log.Println("session id: ", sessionId)
+	fmt.Println(sessionId) // to stdout
 
 	// TODO find images based on manifest name
 
 	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, umfts)
 
-	for _, m := range mfts {
-		Log.Printf("%#v", m)
+	if DEBUG {
+		for _, m := range mfts {
+			Log.Printf("%#v", m)
+		}
 	}
 
 	var haserrors bool
@@ -103,14 +108,16 @@ var launch = otisub.Register("launch", func(args []string) {
 			instanceIds = append(instanceIds, inst.InstanceId)
 		}
 
-		Log.Printf("started instances: %v", instanceIds)
+		if DEBUG {
+			Log.Printf("started instances: %v", instanceIds)
+		}
 
 		_, err = ec2.CreateTags(instanceIds, []awsec2.Tag{
 			{Config.Ec2Tag(otitag.SessionId), string(m.SessionId)},
 		})
 		if err != nil {
 			haserrors = true
-			Log.Printf("unable to tag instances: %v", err)
+			Log.Printf("error tagging instances: %v", err)
 		}
 	}
 	if haserrors {
@@ -121,8 +128,6 @@ var launch = otisub.Register("launch", func(args []string) {
 	if *waitPending {
 		Log.Fatal("waiting not implemented")
 	}
-
-	fmt.Println("LAUNCH!")
 })
 
 func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, umfts []ULM) ([]LaunchManifest, error) {
@@ -200,7 +205,6 @@ type ULM struct {
 	Name            string   // OTI name that can be used to filter images
 	Ec2ImageId      string   // AWS EC2 image id.
 	Ec2InstanceType string   // AWS EC2 instance type.
-	IdentityFile    string   // SSH .pem file
 	Ec2KeyName      string   // AWS EC2 key pair name
 	Ec2SecGroups    []string // Security groups to assign the instances
 	Min, Max        int      // may not be empty
@@ -225,7 +229,6 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 //	max              1
 //	ec2type          "t1.micro"
 //	ami              ""
-//	identity  i      ""
 //	keyname          ""
 //	secgroup         ""
 func ParseUserLaunchManifest(args []string) ([]ULM, error) {
@@ -271,8 +274,6 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 
 			switch key {
 			case "min", "max", "secgroup", "ami", "keyname", "ec2type":
-			case "identity", "i":
-				key = "identity" // alias
 			default:
 				err := fmt.Errorf("unexpected flag %v", key)
 				return retErr(ulmErr(err))
@@ -317,12 +318,6 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 				} else {
 					ulm.Ec2KeyName = vs[0]
 				}
-			case "identity":
-				if numvs > 1 {
-					err = fmt.Errorf("specified multiple times")
-				} else {
-					ulm.IdentityFile = vs[0]
-				}
 			}
 			if err != nil {
 				return retErr(ulmFlagErr(k, err))
@@ -335,14 +330,6 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 
 		if ulm.Ec2ImageId == "" {
 			return retErr(ulmFlagErr("ami", fmt.Errorf("required for now")))
-		}
-
-		if ulm.IdentityFile == "" {
-			return retErr(ulmFlagErr("identity", fmt.Errorf("required for now")))
-		}
-
-		if ulm.Ec2KeyName == "" {
-			return retErr(ulmFlagErr("keyname", fmt.Errorf("required for now")))
 		}
 
 		if ulm.Min > ulm.Max {
