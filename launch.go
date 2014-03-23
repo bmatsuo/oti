@@ -28,6 +28,7 @@ import (
 
 	"flag"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,13 +78,23 @@ var launch = otisub.Register("launch", func(args []string) {
 
 	// find images based on manifest names (if no image is explicitly specified)
 	for _, mft := range ManifestsNeedingImageLookup(umfts) { // mft points into mfts
-		images, err := LookupImages(ec2, mft.Name)
+		images, err := LookupImages(ec2, mft.Name, "")
 		if err != nil {
 			Log.Fatal("error locating image ids: ", err)
 		}
+
 		if len(images) > 0 {
-			Log.Fatal("ambigous results: %v", images)
+			builddatetag := Config.Images.BuildDateTag
+			if builddatetag == "" {
+				Log.Fatal("no build date tag to order images")
+			}
+
+			SortImages(images, builddatetag, true)
+			if len(images) == 0 {
+				Log.Fatal("unable to locate images")
+			}
 		}
+
 		mft.Ec2ImageId = images[0].Id
 	}
 
@@ -110,8 +121,10 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal(err)
 	}
 
-	Log.Println("session id: ", sessionId)
 	fmt.Println(sessionId) // to stdout
+	if DEBUG {
+		Log.Println("session id: ", sessionId)
+	}
 
 	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, keyname, strings.Split(*_secgroups, ","), umfts)
 	if err != nil {
@@ -290,14 +303,74 @@ func ManifestsNeedingImageLookup(ulms []ULM) []*ULM {
 	return _ulms
 }
 
-// use the packer config to locate images on ec2.
-func LookupImages(ec2 *awsec2.EC2, name string) ([]awsec2.Image, error) {
-	return nil, fmt.Errorf("unimplemented")
+// lookup images based on tags specified in the config file
+func LookupImages(ec2 *awsec2.EC2, name, version string) ([]awsec2.Image, error) {
+	nametag := Config.Images.NameTag
+	if nametag == "" {
+		return nil, fmt.Errorf("no name tag to identify images without explicit image ids")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("no image name given")
+	}
+
+	versiontag := Config.Images.VersionTag
+	if version != "" && versiontag == "" {
+		return nil, fmt.Errorf("no version tag to identify images with")
+	}
+
+	filter := awsec2.NewFilter()
+	filter.Add("tag:"+nametag, name)
+	if version != "" {
+		filter.Add("tag"+versiontag, version)
+	}
+
+	resp, err := ec2.Images(nil, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	images := resp.Images
+
+	return images, nil
+}
+
+func SortImages(images []awsec2.Image, tagname string, reverse bool) {
+	s := new(imgsort)
+	s.images = images
+	s.tagval = make([]string, len(images))
+
+	for i := range images {
+		for _, tag := range images[i].Tags {
+			if tag.Key == tagname {
+				s.tagval[i] = tag.Value
+				break
+			}
+		}
+	}
+
+	if reverse {
+		sort.Reverse(s)
+	} else {
+		sort.Sort(s)
+	}
+}
+
+type imgsort struct {
+	tagval []string
+	images []awsec2.Image
+}
+
+func (s imgsort) Len() int           { return len(s.images) }
+func (s imgsort) Less(i, j int) bool { return s.tagval[i] < s.tagval[j] }
+func (s imgsort) Swap(i, j int) {
+	s.tagval[i], s.tagval[j] = s.tagval[j], s.tagval[i]
+	s.images[i], s.images[j] = s.images[j], s.images[i]
 }
 
 // User Launch Manifest -- information read from the command line
 type ULM struct {
 	Name            string   // OTI name that can be used to filter images
+	LatestBuild     bool     // if no image specified use the latest built with matching tags
 	Ec2ImageId      string   // AWS EC2 image id.
 	Ec2InstanceType string   // AWS EC2 instance type.
 	Ec2KeyName      string   // AWS EC2 key pair name
@@ -322,6 +395,7 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 //	flag      alias  default
 //	min              1
 //	max              1
+//	latest           true
 //	ec2type          "t1.micro"
 //	ami              ""
 //	keyname          ""
@@ -347,6 +421,7 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 		// set defaults
 		ulm.Min, ulm.Max = 1, 1
 		ulm.Ec2InstanceType = "t1.micro"
+		ulm.LatestBuild = true
 
 		retErr := func(err error) (ULM, []string, error) {
 			return ULM{}, nil, err
@@ -368,7 +443,7 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			}
 
 			switch key {
-			case "min", "max", "secgroup", "ami", "keyname", "ec2type":
+			case "min", "max", "secgroup", "ami", "keyname", "ec2type", "latest":
 			default:
 				err := fmt.Errorf("unexpected flag %v", key)
 				return retErr(ulmErr(err))
@@ -393,6 +468,19 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 				} else {
 					ulm.Max, err = strconv.Atoi(vs[0])
 				}
+			case "latest":
+				if numvs > 1 {
+					err = fmt.Errorf("specified multiple times")
+				} else {
+					if vs[0] != "" {
+						ulm.LatestBuild, err = strconv.ParseBool(vs[0])
+					}
+					if err == nil {
+						if len(flags["ami"]) > 0 {
+							err = fmt.Errorf(`cannot be specified with "ami"`)
+						}
+					}
+				}
 			case "secgroup":
 				ulm.Ec2SecGroups = vs
 			case "ec2type":
@@ -404,6 +492,8 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			case "ami":
 				if numvs > 1 {
 					err = fmt.Errorf("specified multiple times")
+				} else if !strings.HasPrefix(vs[0], "i-") {
+					err = fmt.Errorf("invalid image id")
 				} else {
 					ulm.Ec2ImageId = vs[0]
 				}
@@ -419,12 +509,12 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			}
 		}
 
-		if ulm.Ec2ImageId == "" {
-			return retErr(ulmFlagErr("ami", fmt.Errorf("required for now")))
+		if ulm.Ec2ImageId != "" {
+			ulm.LatestBuild = false
 		}
 
 		if ulm.Min > ulm.Max {
-			return retErr(ulmErr(err))
+			return retErr(ulmErr(fmt.Errorf(`"min" is greater than "max"`)))
 		}
 
 		if len(rest) > 0 && rest[0] == sepseq {
