@@ -44,22 +44,32 @@ var sessions = otisub.Register("sessions", func(args []string) {
 	}
 
 	wg := new(sync.WaitGroup)
-	for _, r := range aws.Regions {
+	for _, r := range Ec2Regions(false) {
 		r := r
-		if r.Name == "us-gov-west-1" {
-			// shhh
-			continue
-		}
-		if r.EC2Endpoint != "" {
-			wg.Add(1)
-			go func() {
-				SessionsMain(awsauth, r, sessionids)
-				wg.Done()
-			}()
-		}
+		wg.Add(1)
+		go func() {
+			SessionsMain(awsauth, r, sessionids)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
 })
+
+var isAwsUsGovRegion = map[string]bool{"us-gov-west-1": true}
+
+func Ec2Regions(usgov bool) []aws.Region {
+	rs := make([]aws.Region, 0, len(aws.Regions))
+	for k := range aws.Regions {
+		if isAwsUsGovRegion[k] && !usgov {
+			// shhh
+			continue
+		}
+		if aws.Regions[k].EC2Endpoint != "" {
+			rs = append(rs, aws.Regions[k])
+		}
+	}
+	return rs
+}
 
 // locate and inspect sessions, active or terminated
 func SessionsMain(auth aws.Auth, region aws.Region, sessionids []string) {
