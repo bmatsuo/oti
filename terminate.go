@@ -75,7 +75,9 @@ func TerminateMain(targets []string, opts *TerminateOptions) {
 		}
 	}
 
-	Log.Printf("terminating instances %v", instanceIds)
+	if DEBUG {
+		Log.Printf("terminating instances %v", instanceIds)
+	}
 
 	resp, err := ec2.TerminateInstances(instanceIds)
 	if err != nil {
