@@ -5,6 +5,7 @@
 // terminate.go [created: Thu, 20 Mar 2014]
 
 /*
+
 Terminate instances
 
 the "terminate" command can be used to terminate oti sessions.
@@ -14,6 +15,7 @@ the "terminate" command can be used to terminate oti sessions.
 oti-terminate locates all instances belonging to a session and terminates them.
 if all instances in the given sessions enter the 'shutting-down' state, the
 command will exit with a zero exit status.
+
 */
 package main
 

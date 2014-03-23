@@ -5,6 +5,7 @@
 // inspect.go [created: Thu, 20 Mar 2014]
 
 /*
+
 Inspect sessions
 
 the "sessions" command provides information about known oti sessions and their
@@ -16,6 +17,7 @@ locates existing sessions. sessions exists merely by having instances tagged
 with their session id.
 
 BUG sessions cannot span regions
+
 */
 package main
 

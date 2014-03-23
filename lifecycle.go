@@ -5,6 +5,7 @@
 // lifecycle.go [created: Thu, 20 Mar 2014]
 
 /*
+
 Instance lifecycle
 
 run a session through its full lifecycle from launch to termination.
@@ -12,6 +13,7 @@ run a session through its full lifecycle from launch to termination.
 	oti lifecycle name [directive ...] [-- name ... ]
 
 BUG this command does nothing
+
 */
 package main
 
