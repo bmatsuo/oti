@@ -8,30 +8,25 @@
 package oticonfig configuration for the oti command.
 
 
-Deploying images
+Essentials
 
-You can assemble regional profiles for deploying instances. This allows you to
-specify ssh key-pairs and security groups for your instances. you can have
-multiple profiles per region as long as they have unique ids.
+technically all you really need to get going are aws credentials. if you save
+them in aws_credentials.json then oti will find them automatically (use 0400
+credentials on the file)
 
-see C.Ec2.Regions for configuration details.
+	{ "AccessKey": "xxxxxxxxxxxx", "SecretKey": "yyyyyyyyyyyy", }
 
-
-Finding images
-
-You can launch any images as long as they are available in the desired ec2
-region. but oti can find images based on ec2 tags.
-
-see C.Images for configuration details
+see the AwsKey type for details
 
 
-Packer and oti
+Configuration file
 
-oti is made to be used in conjunction with packer or any program that produces
-a large number of images in a structured manner. just have packer build images
-with the tags specified in C.Images.
 
-// BUG finding images based on tags does not work
+a configuration file can make repeated use much easier. create a file
+containing a json object. by default, oti looks for a file called oti.json.
+
+see the C type for details on the configuration format.
+
 */
 package oticonfig
 
