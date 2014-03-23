@@ -31,6 +31,7 @@ var launch = otisub.Register("launch", func(args []string) {
 	fs := otisub.FlagSet(flag.ExitOnError, "inspect", "imagename [directive ...] ...")
 	sessionType := fs.String("s", "launch", "session type for management purposes")
 	keyname := fs.String("k", "", "default key pair used to run instances")
+	region := fs.String("r", "us-east-1", "region to run instances in")
 	waitPending := fs.Bool("w", false, "wait while instances are 'pending'")
 	fs.Parse(args)
 	args = fs.Args()
@@ -44,6 +45,9 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("no manifests")
 	}
 
+	if *region != "us-east-1" {
+		Log.Fatal("unsupported region %q", *region)
+	}
 	awsregion := aws.USEast
 	awsauth, err := Config.AwsAuth()
 	if err != nil {
