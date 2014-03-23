@@ -11,6 +11,8 @@ are subject to change without former notice**
 
 ##Docs
 
+###[getting started](http://github.com/bmatsuo/oti/tree/master/docs/getting_started.md#readme)
+
 ###[usage](http://godoc.org/github.com/bmatsuo/oti)
 
 ###[configuration](http://godoc.org/github.com/bmatsuo/oti/oticonfig)
