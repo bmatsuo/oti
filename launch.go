@@ -30,7 +30,8 @@ import (
 var launch = otisub.Register("launch", func(args []string) {
 	fs := otisub.FlagSet(flag.ExitOnError, "inspect", "imagename [directive ...] ...")
 	sessionType := fs.String("s", "launch", "session type for management purposes")
-	keyname := fs.String("k", "", "default key pair used to run instances")
+	_keyname := fs.String("keyname", "", "override the config KeyName for the region")
+	_secgroups := fs.String("secgroup", "", "security groups to add to the instances")
 	region := fs.String("r", "us-east-1", "region to run instances in")
 	waitPending := fs.Bool("w", false, "wait while instances are 'pending'")
 	fs.Parse(args)
@@ -45,14 +46,26 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("no manifests")
 	}
 
-	if *region != "us-east-1" {
-		Log.Fatal("unsupported region %q", *region)
+	awsregion := aws.Regions[*region]
+	if awsregion.Name == "" {
+		Log.Fatal("unknown ec2 region %q", *region)
 	}
-	awsregion := aws.USEast
 	awsauth, err := Config.AwsAuth()
 	if err != nil {
 		Log.Fatalln("error reading aws credentials: ", err)
 	}
+
+	keyname := *_keyname
+	if keyname == "" {
+		keyname = Config.Ec2KeyName(awsregion)
+	}
+	secgroups := Config.Ec2SecurityGroups(awsregion)
+	secgroups = append(secgroups, func() []awsec2.SecurityGroup {
+		if *_secgroups == "" {
+			return nil
+		}
+		return GuessSecurityGroups(strings.Split(*_secgroups, ","))
+	}()...)
 
 	ec2 := awsec2.New(awsauth, awsregion)
 
@@ -82,7 +95,7 @@ var launch = otisub.Register("launch", func(args []string) {
 	Log.Println("session id: ", sessionId)
 	fmt.Println(sessionId) // to stdout
 
-	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, *keyname, umfts)
+	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, keyname, strings.Split(*_secgroups, ","), umfts)
 	if err != nil {
 		Log.Fatalln(err)
 	}
@@ -137,14 +150,30 @@ var launch = otisub.Register("launch", func(args []string) {
 	}
 })
 
+func GuessSecurityGroups(s []string) []awsec2.SecurityGroup {
+	sgs := make([]awsec2.SecurityGroup, len(s))
+	for i := range s {
+		sgs[i] = GuessSecurityGroup(s[i])
+	}
+	return sgs
+}
+
+func GuessSecurityGroup(s string) awsec2.SecurityGroup {
+	if strings.HasPrefix(s, "sg-") {
+		return awsec2.SecurityGroup{Id: s}
+	} else {
+		return awsec2.SecurityGroup{Name: s}
+	}
+}
+
 // create LaunchManifests from the given ULMs. the manifests are given the
 // provided session id and, if the ULM does not specify a ec2 key name, the
 // provided keyname as well.
-func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, umfts []ULM) ([]LaunchManifest, error) {
+func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, ambigSecgroups []string, umfts []ULM) ([]LaunchManifest, error) {
 	mfts := make([]LaunchManifest, len(umfts))
 
 	// get real security groups.
-	secgroups, err := LookupSecurityGroups(ec2, umfts)
+	secgroups, err := LookupSecurityGroups(ec2, ambigSecgroups, umfts)
 	if err != nil {
 		return nil, fmt.Errorf("error locating up security groups: %v", err)
 	}
@@ -185,16 +214,11 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 	return mfts, nil
 }
 
-func LookupSecurityGroups(ec2 *awsec2.EC2, mfts []ULM) ([]awsec2.SecurityGroupInfo, error) {
+func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []string, mfts []ULM) ([]awsec2.SecurityGroupInfo, error) {
 	var groups []awsec2.SecurityGroup
 	for i := range mfts {
-		for _, group := range mfts[i].Ec2SecGroups {
-			if strings.HasPrefix(group, "sg-") {
-				groups = append(groups, awsec2.SecurityGroup{Id: group})
-			} else {
-				groups = append(groups, awsec2.SecurityGroup{Name: group})
-			}
-		}
+		secgroups = append(append([]string{}, secgroups...), mfts[i].Ec2SecGroups...)
+		groups = append(groups, GuessSecurityGroups(mfts[i].Ec2SecGroups)...)
 	}
 
 	resp, err := ec2.SecurityGroups(groups, nil)
@@ -342,10 +366,6 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			if err != nil {
 				return retErr(ulmFlagErr(k, err))
 			}
-		}
-
-		if len(ulm.Ec2SecGroups) == 0 {
-			return retErr(ulmFlagErr("secgroup", fmt.Errorf("required for now")))
 		}
 
 		if ulm.Ec2ImageId == "" {

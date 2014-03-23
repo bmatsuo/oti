@@ -13,6 +13,7 @@ import (
 	"github.com/bmatsuo/go-jsontree"
 	"github.com/bmatsuo/oti/otitag"
 	"github.com/crowdmob/goamz/aws"
+	awsec2 "github.com/crowdmob/goamz/ec2"
 
 	"encoding/json"
 	"fmt"
@@ -30,26 +31,36 @@ type C struct {
 	// see func (c *C) Packer(string)
 	PackerDir string `json:",omitempty"`
 
-	Ec2 Ec2
+	// default Ec2 deployment configurations
+	Ec2 Ec2 `json:",omitempty"`
 }
 
 type Ec2 struct {
 	// see func (c *C) Ec2Tag(otitag.OTITag)
-	// oti gives this a default value.
 	TagPrefix string `json:",omitempty"`
 
 	// region specific configuration
-	Regions []struct {
-		// ec2 key name (recommended). overrideable per instance
-		KeyName string `json:",omitempty"`
+	Regions []Ec2Region
+}
 
-		// security groups. additional groups can be added per instance.
-		// security groups with neither Id or Name are ignored.
-		SecurityGroups []struct {
-			Id   string `json:",omitempty"`
-			Name string `json:",omitempty"`
-		} `json:",omitempty"`
-	}
+type Ec2Region struct {
+	// an ec2 canonical region name (e.g. "us-east-1"). required
+	RegionName string
+
+	// not yet used
+	//ProfileId  string `json:",omitempty"`
+
+	// ec2 key name (recommended). overrideable per instance
+	KeyName string `json:",omitempty"`
+
+	// security groups. additional groups can be added per instance.
+	SecurityGroups []Ec2SecurityGroup `json:",omitempty"`
+}
+
+// security groups with neither Id or Name are ignored.
+type Ec2SecurityGroup struct {
+	Id   string `json:",omitempty"`
+	Name string `json:",omitempty"`
 }
 
 // unmarshal json data stored at path into c. any error encountered is returned.
@@ -68,6 +79,50 @@ func Read(path string, c *C) error {
 // returns name prefixed with c.TagPrefix
 func (c *C) Ec2Tag(tag otitag.OTITag) string {
 	return c.Ec2.TagPrefix + string(tag)
+}
+
+// returns the first region config with RegionName equal to r.Name
+func (c *C) Ec2Region(r aws.Region) *Ec2Region {
+	for _, cr := range c.Ec2.Regions {
+		if cr.RegionName == r.Name {
+			return &cr
+		}
+	}
+	return nil
+}
+
+// BUG uses the first region config with right name
+func (c *C) Ec2KeyName(r aws.Region) string {
+	cr := c.Ec2Region(r)
+	if cr == nil {
+		return ""
+	}
+
+	return cr.KeyName
+}
+
+// BUG uses the first region config with right name
+func (c *C) Ec2SecurityGroups(r aws.Region) []awsec2.SecurityGroup {
+	cr := c.Ec2Region(r)
+	if cr == nil {
+		return nil
+	}
+
+	n := len(cr.SecurityGroups)
+	if n == 0 {
+		return nil
+	}
+
+	sgs := make([]awsec2.SecurityGroup, n)
+	for i, sg := range cr.SecurityGroups {
+		if sg == (Ec2SecurityGroup{}) {
+			continue
+		}
+		sgs[i].Id = sg.Id
+		sgs[i].Name = sg.Name
+	}
+
+	return sgs
 }
 
 // like c.AwsKey() but returns an aws.Auth type

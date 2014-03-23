@@ -26,6 +26,7 @@ import (
 var terminate = otisub.Register("terminate", func(args []string) {
 	opts := new(TerminateOptions)
 	fs := otisub.FlagSet(flag.ExitOnError, "terminate", "target ...")
+	region := fs.String("r", "us-east-1", "ec2 region to look for instances")
 	fs.BoolVar(&opts.WaitShuttingDown, "w", false, "wait while instances are 'shutting-down'")
 	fs.Parse(args)
 	args = fs.Args()
@@ -35,7 +36,11 @@ var terminate = otisub.Register("terminate", func(args []string) {
 		Log.Fatal("error reading aws credentials: ", err)
 	}
 	opts.Auth = auth
-	opts.Region = aws.USEast
+
+	opts.Region = aws.Regions[*region]
+	if opts.Region.Name == "" {
+		Log.Fatal("unknown ec2 region %q", *region)
+	}
 
 	TerminateMain(args, opts)
 })
