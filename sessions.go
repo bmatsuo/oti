@@ -23,6 +23,7 @@ import (
 
 	"flag"
 	"fmt"
+	"sync"
 )
 
 var sessions = otisub.Register("sessions", func(args []string) {
@@ -31,13 +32,27 @@ var sessions = otisub.Register("sessions", func(args []string) {
 
 	sessionids := fs.Args()
 
-	awsregion := aws.USEast
 	awsauth, err := Config.AwsAuth()
 	if err != nil {
 		Log.Fatalf("error reading aws credentials: %v", err)
 	}
 
-	SessionsMain(awsauth, awsregion, sessionids)
+	wg := new(sync.WaitGroup)
+	for _, r := range aws.Regions {
+		r := r
+		if r.Name == "us-gov-west-1" {
+			// shhh
+			continue
+		}
+		if r.EC2Endpoint != "" {
+			wg.Add(1)
+			go func() {
+				SessionsMain(awsauth, r, sessionids)
+				wg.Done()
+			}()
+		}
+	}
+	wg.Wait()
 })
 
 // locate and inspect sessions, active or terminated
@@ -50,7 +65,7 @@ func SessionsMain(auth aws.Auth, region aws.Region, sessionids []string) {
 
 	// print session details to stdout
 	for _, s := range sessions {
-		fmt.Printf("%s\t%s\n", s.Id, DescribeSessionInstanceStates(s))
+		fmt.Printf("%s\t%s\t%s\n", region.Name, s.Id, DescribeSessionInstanceStates(s))
 	}
 }
 
