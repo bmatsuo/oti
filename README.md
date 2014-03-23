@@ -1,6 +1,9 @@
 [godoc.org]: http://godoc.org/github.com/bmatsuo/oti "godoc.org"
 
-One-time instances
+one time instance
+
+**this is beta software. the oti command and the packages in this repository
+are subject to change without former notice**
 
 ##Install
 
