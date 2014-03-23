@@ -8,11 +8,11 @@
 
 Instance lifecycle
 
+BUG this command does nothing
+
 run a session through its full lifecycle from launch to termination.
 
 	oti lifecycle name [directive ...] [-- name ... ]
-
-BUG this command does nothing
 
 */
 package main

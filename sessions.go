@@ -8,6 +8,8 @@
 
 Inspect sessions
 
+BUG sessions cannot span regions
+
 the "sessions" command provides information about known oti sessions and their
 resources. resources are identified by tag values.
 
@@ -15,8 +17,6 @@ resources. resources are identified by tag values.
 
 locates existing sessions. sessions exists merely by having instances tagged
 with their session id.
-
-BUG sessions cannot span regions
 
 */
 package main
