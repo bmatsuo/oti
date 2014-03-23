@@ -64,7 +64,7 @@ var inspect = otisub.Register("inspect", func(args []string) {
 		var names []string
 		names = args
 		if len(names) == 0 {
-			pkrs, err := Config.Packers()
+			pkrs, err := Config.PackerManifestNames()
 			if err != nil {
 				Log.Fatalf("error locating packer files: %v", err)
 			}

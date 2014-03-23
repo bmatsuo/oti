@@ -24,15 +24,31 @@ import (
 
 // the json configuration for oti
 type C struct {
+	// packer manifest configuration
+	Packer Packer `json:",omitempty"`
+
 	// see func (c *C) AwsKey()
 	AwsKeyPath string `json:",omitempty"`
 
-	// a directory containing packer manifests.
-	// see func (c *C) Packer(string)
-	PackerDir string `json:",omitempty"`
-
 	// default Ec2 deployment configurations
 	Ec2 Ec2 `json:",omitempty"`
+
+}
+
+type Packer struct {
+	// a directory containing packer manifests.
+	// see func (c *C) Packer(string)
+	ManifestDir string `json:",omitempty"`
+
+	// a tag which identifies all images constructed with amazon builders.
+	NameTag string `json:",omitempty"`
+
+	// the name of a tag in packer which has the template "{{isotime}}".
+	BuildDateTag string `json:",omitempty"`
+
+	// a tag containing a sematic version number identifying it among images
+	// with the same name.
+	VersionTag string `json:",omitempty"` // not used
 }
 
 type Ec2 struct {
@@ -44,11 +60,12 @@ type Ec2 struct {
 }
 
 type Ec2Region struct {
+	// a unique identifier for the object. required if more than one region
+	// profile is defined for the same RegionName.
+	Id string `json:",omitempty"`
+
 	// an ec2 canonical region name (e.g. "us-east-1"). required
 	RegionName string
-
-	// not yet used
-	//ProfileId  string `json:",omitempty"`
 
 	// ec2 key name (recommended). overrideable per instance
 	KeyName string `json:",omitempty"`
@@ -167,9 +184,9 @@ func (c *C) AwsKey() (*AwsKey, error) {
 
 // unmarshal a packer file by name. see c.Packers() for details about
 // names.
-func (c *C) Packer(name string) (*Packer, error) {
-	var p Packer
-	ppath := filepath.Join(c.PackerDir, name+".json")
+func (c *C) PackerManifest(name string) (*PackerManifest, error) {
+	var p PackerManifest
+	ppath := filepath.Join(c.Packer.ManifestDir, name+".json")
 	pp, err := ioutil.ReadFile(ppath)
 	if err != nil {
 		return nil, err
@@ -185,8 +202,8 @@ func (c *C) Packer(name string) (*Packer, error) {
 
 // return the name of packer manifests in c.PackerDir. the name of the
 // manifest is the file basename (without the ".json" extension).
-func (c *C) Packers() ([]string, error) {
-	ps, err := filepath.Glob(filepath.Join(c.PackerDir, "*.json"))
+func (c *C) PackerManifestNames() ([]string, error) {
+	ps, err := filepath.Glob(filepath.Join(c.Packer.ManifestDir, "*.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +218,7 @@ type AwsKey struct {
 	SecretKey string
 }
 
-type Packer struct {
+type PackerManifest struct {
 	Vars         *jsontree.JsonTree
 	Builders     []*jsontree.JsonTree
 	Provisioners []*jsontree.JsonTree
