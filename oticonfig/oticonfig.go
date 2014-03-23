@@ -5,7 +5,33 @@
 // oticonfig.go [created: Thu, 20 Mar 2014]
 
 /*
-configuration for oti.
+package oticonfig configuration for the oti command.
+
+
+Deploying images
+
+You can assemble regional profiles for deploying instances. This allows you to
+specify ssh key-pairs and security groups for your instances. you can have
+multiple profiles per region as long as they have unique ids.
+
+see C.Ec2.Regions for configuration details.
+
+
+Finding images
+
+You can launch any images as long as they are available in the desired ec2
+region. but oti can find images based on ec2 tags.
+
+see C.Images for configuration details
+
+
+Packer and oti
+
+oti is made to be used in conjunction with packer or any program that produces
+a large number of images in a structured manner. just have packer build images
+with the tags specified in C.Images.
+
+// BUG finding images based on tags does not work
 */
 package oticonfig
 
