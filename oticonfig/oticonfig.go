@@ -6,7 +6,6 @@
 
 /*
 configuration for oti.
-
 */
 package oticonfig
 
@@ -22,11 +21,35 @@ import (
 	"strings"
 )
 
-// configuration for
+// the json configuration for oti
 type C struct {
-	AwsKeyPath   string // see func (c *C) AwsKey()
-	PackerDir    string // see func (c *C) Packer(string)
-	Ec2TagPrefix string // see func (c *C) EC2Tag(otitag.OTITag)
+	// see func (c *C) AwsKey()
+	AwsKeyPath string `json:",omitempty"`
+
+	// a directory containing packer manifests.
+	// see func (c *C) Packer(string)
+	PackerDir string `json:",omitempty"`
+
+	Ec2 Ec2
+}
+
+type Ec2 struct {
+	// see func (c *C) Ec2Tag(otitag.OTITag)
+	// oti gives this a default value.
+	TagPrefix string `json:",omitempty"`
+
+	// region specific configuration
+	Regions []struct {
+		// ec2 key name (recommended). overrideable per instance
+		KeyName string `json:",omitempty"`
+
+		// security groups. additional groups can be added per instance.
+		// security groups with neither Id or Name are ignored.
+		SecurityGroups []struct {
+			Id   string `json:",omitempty"`
+			Name string `json:",omitempty"`
+		} `json:",omitempty"`
+	}
 }
 
 // unmarshal json data stored at path into c. any error encountered is returned.
@@ -44,7 +67,7 @@ func Read(path string, c *C) error {
 
 // returns name prefixed with c.TagPrefix
 func (c *C) Ec2Tag(tag otitag.OTITag) string {
-	return c.Ec2TagPrefix + string(tag)
+	return c.Ec2.TagPrefix + string(tag)
 }
 
 // like c.AwsKey() but returns an aws.Auth type

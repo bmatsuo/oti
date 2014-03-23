@@ -24,7 +24,9 @@ var OTIAgent = "oti"
 var ConfigPath = "oti.json"
 var Config = &oticonfig.C{
 	AwsKeyPath: "aws_credentials.json",
-	Ec2TagPrefix:  "co.bmats.oti.",
+	Ec2: oticonfig.Ec2{
+		TagPrefix: "co.bmats.oti.",
+	},
 }
 
 var Log = log.New(os.Stderr, "", 0)
