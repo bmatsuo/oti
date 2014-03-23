@@ -7,11 +7,11 @@
 /*
 Instance lifecycle
 
-run a full lifecycle for one or more instances durig the lifetime of the
-oti process.
+run a session through its full lifecycle from launch to termination.
 
-	oti lifecycle -h
+	oti lifecycle name [directive ...] [-- name ... ]
 
+BUG this command does nothing
 */
 package main
 
@@ -28,5 +28,5 @@ var lifecycle = otisub.Register("lifecycle", func(args []string) {
 	fs.Parse(args)
 	args = fs.Args()
 
-	fmt.Println("The circle of life.")
+	fmt.Println("the circle of life.")
 })

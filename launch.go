@@ -9,8 +9,11 @@ Launch instances
 
 the "launch" command can be used to spin up one or more new ec2 instances.
 
-	oti launch -h
+	oti launch name [directive ...] [-- name ...]
 
+oti-launch locates an image for each name provided and launches a specified
+number of instances for each image. the instances are all tagged with a common
+session identifier so they can be located later (e.g. for termination).
 */
 package main
 

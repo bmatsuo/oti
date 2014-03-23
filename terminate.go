@@ -7,10 +7,13 @@
 /*
 Terminate instances
 
-the "terminate" command can be used to terminate one or more ec2 instances.
+the "terminate" command can be used to terminate oti sessions.
 
-	oti terminate -h
+	oti terminate session-id ...
 
+oti-terminate locates all instances belonging to a session and terminates them.
+if all instances in the given sessions enter the 'shutting-down' state, the
+command will exit with a zero exit status.
 */
 package main
 
@@ -25,7 +28,7 @@ import (
 
 var terminate = otisub.Register("terminate", func(args []string) {
 	opts := new(TerminateOptions)
-	fs := otisub.FlagSet(flag.ExitOnError, "terminate", "target ...")
+	fs := otisub.FlagSet(flag.ExitOnError, "terminate", "session-id ...")
 	region := fs.String("r", "us-east-1", "ec2 region to look for instances")
 	fs.BoolVar(&opts.WaitShuttingDown, "w", false, "wait while instances are 'shutting-down'")
 	fs.Parse(args)
@@ -54,7 +57,8 @@ type TerminateOptions struct {
 // takes a list of target identifiers to terminate and options.
 func TerminateMain(targets []string, opts *TerminateOptions) {
 	if len(targets) == 0 {
-		Log.Fatal("no targets...")
+		Log.Println("no targets...")
+		return
 	}
 
 	ec2 := awsec2.New(opts.Auth, opts.Region)

@@ -12,6 +12,10 @@ resources. resources are identified by tag values.
 
 	oti sessions -h
 
+locates existing sessions. sessions exists merely by having instances tagged
+with their session id.
+
+BUG sessions cannot span regions
 */
 package main
 
