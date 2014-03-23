@@ -27,27 +27,30 @@ type C struct {
 	// packer manifest configuration
 	Packer Packer `json:",omitempty"`
 
+	// metadata allowing usage of tags on images
+	Images Images
+
 	// see func (c *C) AwsKey()
 	AwsKeyPath string `json:",omitempty"`
 
 	// default Ec2 deployment configurations
 	Ec2 Ec2 `json:",omitempty"`
-
 }
 
 type Packer struct {
 	// a directory containing packer manifests.
 	// see func (c *C) Packer(string)
 	ManifestDir string `json:",omitempty"`
+}
 
-	// a tag which identifies all images constructed with amazon builders.
+type Images struct {
+	// tag identifying the service(s) provided by an image
 	NameTag string `json:",omitempty"`
 
-	// the name of a tag in packer which has the template "{{isotime}}".
+	// tag identifying the date an image was created
 	BuildDateTag string `json:",omitempty"`
 
-	// a tag containing a sematic version number identifying it among images
-	// with the same name.
+	// tag containing a semantic version for the image
 	VersionTag string `json:",omitempty"` // not used
 }
 
