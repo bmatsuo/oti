@@ -8,7 +8,9 @@ One-time instances
 
 ##Docs
 
-On [godoc.org][]
+###[usage](http://godoc.org/github.com/bmatsuo/oti)
+
+###[configuration](http://godoc.org/github.com/bmatsuo/oti/oticonfig)
 
 ##Author
 
