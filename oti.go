@@ -34,8 +34,6 @@ var Log = log.New(os.Stderr, "", 0)
 func main() {
 	fs := flag.NewFlagSet("oti", flag.ExitOnError)
 	fs.BoolVar(&DEBUG, "debug", false, "debug logging output")
-	fs.StringVar(&Config.Packer.ManifestDir, "p",
-		Config.Packer.ManifestDir, "packer file directory")
 	fs.StringVar(&ConfigPath, "c", ConfigPath, "config file location")
 	fs.Usage = func() {
 		Log.Println("usage: oti [options] command")
