@@ -25,11 +25,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var launch = otisub.Register("launch", func(args []string) {
 	fs := otisub.FlagSet(flag.ExitOnError, "inspect", "imagename [directive ...] ...")
-	sessionType := fs.String("s", "launch", "session type for management purposes")
+	_sessionType := fs.String("s", "", "session type for management purposes")
 	_keyname := fs.String("keyname", "", "override the config KeyName for the region")
 	_secgroups := fs.String("secgroup", "", "security groups to add to the instances")
 	region := fs.String("r", "us-east-1", "region to run instances in")
@@ -81,13 +82,25 @@ var launch = otisub.Register("launch", func(args []string) {
 		mft.Ec2ImageId = images[0].Id
 	}
 
-	if DEBUG {
-		for _, m := range umfts {
+	for _, m := range umfts {
+		if m.Name == "" {
+			Log.Fatalf("manifest missing a name")
+		}
+		if DEBUG {
 			Log.Printf("%#v", m)
 		}
 	}
 
-	sessionId, err := NewSessionId(*sessionType)
+	sessionType := *_sessionType
+	if sessionType == "" {
+		if len(umfts) == 1 {
+			sessionType = umfts[0].Name
+		} else {
+			sessionType = "session"
+		}
+	}
+
+	sessionId, err := NewSessionId(sessionType)
 	if err != nil {
 		Log.Fatal(err)
 	}
@@ -100,46 +113,41 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatalln(err)
 	}
 
-	if DEBUG {
-		for _, m := range mfts {
-			Log.Printf("%#v", m)
-		}
-	}
-
 	var haserrors bool
+	done := new(sync.WaitGroup)
+	ich := make(chan Instances)
+	_ich := make(chan []Instances, 1)
 	for _, m := range mfts {
-		runopts := &awsec2.RunInstancesOptions{
-			ImageId:        m.Ec2.ImageId,
-			MinCount:       m.Min,
-			MaxCount:       m.Max,
-			KeyName:        m.Ec2.KeyName,
-			InstanceType:   m.Ec2.InstanceType,
-			SecurityGroups: m.Ec2.SecurityGroups,
-		}
-		resp, err := ec2.RunInstances(runopts)
-		if err != nil {
-			haserrors = true
-			Log.Printf("error running %q: %v", m.Name, err)
-			continue
-		}
-
-		var instanceIds []string
-		for _, inst := range resp.Instances {
-			instanceIds = append(instanceIds, inst.InstanceId)
-		}
-
 		if DEBUG {
-			Log.Printf("started instances: %v", instanceIds)
+			Log.Printf("launching manifest %#v", m)
 		}
-
-		_, err = ec2.CreateTags(instanceIds, []awsec2.Tag{
-			{Config.Ec2Tag(otitag.SessionId), string(m.SessionId)},
-		})
-		if err != nil {
-			haserrors = true
-			Log.Printf("error tagging instances: %v", err)
-		}
+		done.Add(1)
+		go func(m LaunchManifest) {
+			RunInstances(ec2, m, ich)
+			done.Done()
+		}(m)
 	}
+	go func() {
+		var _is []Instances
+		defer func() { _ich <- _is; close(_ich) }()
+		for is := range ich {
+			if is.Err != nil {
+				haserrors = true
+				Log.Print(is.Err)
+			} else {
+				_is = append(_is, is)
+				for _, inst := range is.Is {
+					fmt.Printf("%s %s %s\n", is.M.Name, inst.InstanceId, inst.State.Name)
+				}
+			}
+		}
+	}()
+
+	done.Wait()
+	close(ich)
+	iss := <-_ich
+	_ = iss
+
 	if haserrors {
 		Log.Fatal()
 	}
@@ -149,6 +157,44 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("waiting not implemented")
 	}
 })
+
+type Instances struct {
+	M   LaunchManifest
+	Is  []awsec2.Instance
+	Err error
+}
+
+func RunInstances(ec2 *awsec2.EC2, m LaunchManifest, c chan<- Instances) {
+	is := Instances{M: m}
+	defer func() { c <- is }()
+
+	runopts := &awsec2.RunInstancesOptions{
+		ImageId:        m.Ec2.ImageId,
+		MinCount:       m.Min,
+		MaxCount:       m.Max,
+		KeyName:        m.Ec2.KeyName,
+		InstanceType:   m.Ec2.InstanceType,
+		SecurityGroups: m.Ec2.SecurityGroups,
+	}
+	resp, err := ec2.RunInstances(runopts)
+	if err != nil {
+		is.Err = fmt.Errorf("manifest %q: error running isntances %v", m.Name, err)
+		return
+	}
+	is.Is = resp.Instances
+
+	var ids []string
+	for _, inst := range resp.Instances {
+		ids = append(ids, inst.InstanceId)
+	}
+
+	tags := []awsec2.Tag{{Config.Ec2Tag(otitag.SessionId), string(m.SessionId)}}
+	_, err = ec2.CreateTags(ids, tags)
+	if err != nil {
+		is.Err = fmt.Errorf("manifest %q: error tagging instances: %v", m.Name, err)
+		return
+	}
+}
 
 func GuessSecurityGroups(s []string) []awsec2.SecurityGroup {
 	sgs := make([]awsec2.SecurityGroup, len(s))
