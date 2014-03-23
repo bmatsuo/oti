@@ -30,6 +30,7 @@ import (
 var launch = otisub.Register("launch", func(args []string) {
 	fs := otisub.FlagSet(flag.ExitOnError, "inspect", "imagename [directive ...] ...")
 	sessionType := fs.String("s", "launch", "session type for management purposes")
+	keyname := fs.String("k", "", "default key pair used to run instances")
 	waitPending := fs.Bool("w", false, "wait while instances are 'pending'")
 	fs.Parse(args)
 	args = fs.Args()
@@ -51,6 +52,7 @@ var launch = otisub.Register("launch", func(args []string) {
 
 	ec2 := awsec2.New(awsauth, awsregion)
 
+	// find images based on manifest names (if no image is explicitly specified)
 	for _, mft := range ManifestsNeedingImageLookup(umfts) { // mft points into mfts
 		images, err := LookupImages(ec2, mft.Name)
 		if err != nil {
@@ -76,9 +78,10 @@ var launch = otisub.Register("launch", func(args []string) {
 	Log.Println("session id: ", sessionId)
 	fmt.Println(sessionId) // to stdout
 
-	// TODO find images based on manifest name
-
-	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, umfts)
+	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, *keyname, umfts)
+	if err != nil {
+		Log.Fatalln(err)
+	}
 
 	if DEBUG {
 		for _, m := range mfts {
@@ -130,29 +133,42 @@ var launch = otisub.Register("launch", func(args []string) {
 	}
 })
 
-func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, umfts []ULM) ([]LaunchManifest, error) {
+// create LaunchManifests from the given ULMs. the manifests are given the
+// provided session id and, if the ULM does not specify a ec2 key name, the
+// provided keyname as well.
+func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, umfts []ULM) ([]LaunchManifest, error) {
 	mfts := make([]LaunchManifest, len(umfts))
+
+	// get real security groups.
 	secgroups, err := LookupSecurityGroups(ec2, umfts)
 	if err != nil {
 		return nil, fmt.Errorf("error locating up security groups: %v", err)
 	}
 
+	// get key pairs TODO
+
+	// build each LaunchManifest
 	for i := range umfts {
-		mfts[i].SessionId = sessionId
-		mfts[i].Name = umfts[i].Name
-		mfts[i].Min = umfts[i].Min
-		mfts[i].Max = umfts[i].Max
-		mfts[i].Ec2.InstanceType = umfts[i].Ec2InstanceType
-		mfts[i].Ec2.ImageId = umfts[i].Ec2ImageId
-		mfts[i].Ec2.KeyName = umfts[i].Ec2KeyName
-		for _, group := range umfts[i].Ec2SecGroups {
+		m := &mfts[i]
+		um := &umfts[i]
+		m.SessionId = sessionId
+		m.Name = um.Name
+		m.Min = um.Min
+		m.Max = um.Max
+		m.Ec2.InstanceType = um.Ec2InstanceType
+		m.Ec2.ImageId = um.Ec2ImageId
+		m.Ec2.KeyName = um.Ec2KeyName
+		if m.Ec2.KeyName == "" {
+			m.Ec2.KeyName = keyname
+		}
+		for _, group := range um.Ec2SecGroups {
 			found := false
 			for _, info := range secgroups {
 				if info.Id == group {
-					mfts[i].Ec2.SecurityGroups = append(mfts[i].Ec2.SecurityGroups, info.SecurityGroup)
+					m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, info.SecurityGroup)
 					found = true
 				} else if info.Name == group {
-					mfts[i].Ec2.SecurityGroups = append(mfts[i].Ec2.SecurityGroups, info.SecurityGroup)
+					m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, info.SecurityGroup)
 					found = true
 				}
 			}
