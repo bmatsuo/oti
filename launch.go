@@ -28,6 +28,7 @@ import (
 
 	"flag"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,35 +81,9 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal()
 	}
 
-	if DEBUG {
-		for _, m := range umfts {
-			if m.Name == "" {
-				Log.Fatalf("manifest missing a name")
-			}
-			if m.Ec2Region.Name == "" {
-				Log.Fatal("manifest %q missing an ec2 region", m.Name)
-			}
-			Log.Printf("%#v", m)
-		}
-	}
-
-	sessionType := *_sessionType
-	if sessionType == "" {
-		if len(umfts) == 1 {
-			sessionType = umfts[0].Name
-		} else {
-			sessionType = "session"
-		}
-	}
-
-	sessionId, err := NewSessionId(sessionType)
+	sessionId, err := CreateSessionId(*_sessionType, umfts)
 	if err != nil {
 		Log.Fatal(err)
-	}
-
-	fmt.Println(sessionId) // to stdout
-	if DEBUG {
-		Log.Println("session id: ", sessionId)
 	}
 
 	mfts, err := BuildSystemLaunchManifests(awsauth, sessionId, umfts)
@@ -116,12 +91,23 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatalln(err)
 	}
 
+	err = ValidateManifests(mfts)
+	if err != nil {
+		Log.Fatalln(err)
+	}
+
+
+	if DEBUG {
+		Log.Println("launching manifests with session id: ", sessionId)
+	}
+	fmt.Println(sessionId) // to stdout
+
 	isByRegion, errs := LaunchManifests(awsauth, mfts)
 	for r, iss := range isByRegion {
 		for _, is := range iss {
 			for _, inst := range is.Is {
 				if is.Err != nil {
-					Log.Printf("error launching %q in region %q: %v",
+					fmt.Fprintf(os.Stderr, "error launching %q in region %q: %v\n",
 						is.M.Name, is.M.Ec2.Region, is.Err)
 				} else {
 					cols := []string{
@@ -144,6 +130,33 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("waiting not implemented")
 	}
 })
+
+func ValidateManifests(ms []LaunchManifest) error {
+	if DEBUG {
+		for _, m := range ms {
+			if m.Name == "" {
+				return fmt.Errorf("manifest missing a name")
+			}
+			if m.Ec2.Region.Name == "" {
+				return fmt.Errorf("manifest %q missing an ec2 region", m.Name)
+			}
+			Log.Printf("%#v", m)
+		}
+	}
+	return nil
+}
+
+func CreateSessionId(stype string, ms []ULM) (SessionId, error) {
+	if stype == "" {
+		if len(ms) == 1 {
+			stype = ms[0].Name
+		} else {
+			stype = "session"
+		}
+	}
+
+	return NewSessionId(stype)
+}
 
 func LaunchManifests(auth aws.Auth, ms []LaunchManifest) (map[aws.Region][]Instances, []error) {
 	var errs []error
