@@ -92,7 +92,7 @@ When you are done, terminate the instance.
 
 Default key pairs and security groups can be declared in the
 [oticonfig](http://godoc.org/github.com/bmatsuo/oti/oticonfig#Ec2Region) file.
-For details of this example, see the [example oticonfig](#Example_oticonfig).
+For details of this example, see the [example oticonfig](#example-oticonfig).
 
 #Tagging images
 
@@ -107,7 +107,7 @@ attempt to guess which image to launch when you don supply an explicit image id.
     $ oti terminate -s myservice
     i-5fbb487e shutting-down (was pending)
 
-With the [example oticonfig](#Example_oticonfig) `oti launch` looks for images
+With the [example oticonfig](#example-oticonfig) `oti launch` looks for images
 with a "Name" tag equal to "myservice".  If multiple "myservice" images are
 found then the image with the most recent "BuildTime" tag holding the most
 recent timestamp is selected.
