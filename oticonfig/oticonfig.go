@@ -12,7 +12,7 @@ Essentials
 
 technically all you really need to get going are aws credentials. if you save
 them in aws_credentials.json then oti will find them automatically (use 0400
-credentials on the file)
+permissions on the file).
 
 	{ "AccessKey": "xxxxxxxxxxxx", "SecretKey": "yyyyyyyyyyyy", }
 
