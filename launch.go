@@ -116,7 +116,7 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatalln(err)
 	}
 
-	isByRegion, errs := LaunchMain(awsauth, mfts)
+	isByRegion, errs := LaunchManifests(awsauth, mfts)
 	for r, iss := range isByRegion {
 		for _, is := range iss {
 			for _, inst := range is.Is {
@@ -145,7 +145,7 @@ var launch = otisub.Register("launch", func(args []string) {
 	}
 })
 
-func LaunchMain(auth aws.Auth, ms []LaunchManifest) (map[aws.Region][]Instances, []error) {
+func LaunchManifests(auth aws.Auth, ms []LaunchManifest) (map[aws.Region][]Instances, []error) {
 	var errs []error
 	isByRegion := make(map[aws.Region][]Instances)
 	msByRegion := groupLMsByRegion(ms)
