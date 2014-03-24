@@ -72,35 +72,22 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("no manifests")
 	}
 
-	ec2 := awsec2.New(awsauth, awsregion)
-
-	// find images based on manifest names (if no image is explicitly specified)
-	for _, mft := range ManifestsNeedingImageLookup(umfts) { // mft points into mfts
-		images, err := LookupImages(ec2, mft.Name, "")
-		if err != nil {
-			Log.Fatal("error locating image ids: ", err)
+	errs := ResolveImages(awsauth, umfts)
+	if err != nil {
+		for i := range errs {
+			Log.Println(errs[i])
 		}
-
-		if len(images) > 0 {
-			builddatetag := Config.Images.BuildDateTag
-			if builddatetag == "" {
-				Log.Fatal("no build date tag to order images")
-			}
-
-			SortImages(images, builddatetag, true)
-			if len(images) == 0 {
-				Log.Fatal("unable to locate images")
-			}
-		}
-
-		mft.Ec2ImageId = images[0].Id
+		Log.Fatal()
 	}
 
-	for _, m := range umfts {
-		if m.Name == "" {
-			Log.Fatalf("manifest missing a name")
-		}
-		if DEBUG {
+	if DEBUG {
+		for _, m := range umfts {
+			if m.Name == "" {
+				Log.Fatalf("manifest missing a name")
+			}
+			if m.Ec2Region.Name == "" {
+				Log.Fatal("manifest %q missing an ec2 region", m.Name)
+			}
 			Log.Printf("%#v", m)
 		}
 	}
@@ -124,7 +111,7 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Println("session id: ", sessionId)
 	}
 
-	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, umfts)
+	mfts, err := BuildSystemLaunchManifests(awsauth, sessionId, umfts)
 	if err != nil {
 		Log.Fatalln(err)
 	}
@@ -134,11 +121,13 @@ var launch = otisub.Register("launch", func(args []string) {
 	ich := make(chan Instances)
 	_ich := make(chan []Instances, 1)
 	for _, m := range mfts {
-		if DEBUG {
-			Log.Printf("launching manifest %#v", m)
-		}
+		m := m
 		done.Add(1)
 		go func(m LaunchManifest) {
+			if DEBUG {
+				Log.Printf("launching manifest %#v", m)
+			}
+			ec2 := awsec2.New(awsauth, m.Ec2.Region)
 			RunInstances(ec2, m, ich)
 			done.Done()
 		}(m)
@@ -173,6 +162,73 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("waiting not implemented")
 	}
 })
+
+func groupUlmsByRegion(ms []ULM) map[aws.Region][]*ULM {
+	if len(ms) == 0 {
+		return nil
+	}
+	msByRegion := make(map[aws.Region][]*ULM, len(ms))
+	for i := range ms {
+		region := ms[i].Ec2Region
+		msByRegion[region] = append(msByRegion[region], &ms[i])
+	}
+	return msByRegion
+}
+
+func ResolveImages(auth aws.Auth, ms []ULM) []error {
+	if len(ms) == 0 {
+		return nil
+	}
+	msByRegion := groupUlmsByRegion(ms)
+	errch := make(chan error, len(aws.Regions))
+	wg := new(sync.WaitGroup)
+	for r, ms := range msByRegion { // shadow ms
+		r, ms := r, ms
+		ec2 := awsec2.New(auth, r)
+		// find images based on manifest names (if no image is explicitly specified)
+		for _, m := range _ManifestsNeedingImageLookup(ms) {
+			m := m
+			wg.Add(1)
+			go func() {
+				images, err := LookupImages(ec2, m.Name, "") // no version for now
+				if err != nil {
+					errch <- fmt.Errorf("error locating %q images in region %q: %v",
+						r.Name, err)
+					return
+				}
+
+				if len(images) == 0 {
+					errch <- fmt.Errorf("failed to locate %q images in region %q",
+						m.Name, r.Name)
+					return
+				}
+
+				if len(images) > 0 {
+					// this is a lazy error in case people want to have their NameTag be unique
+					builddatetag := Config.Images.BuildDateTag
+					if builddatetag == "" {
+						errch <- fmt.Errorf("ambiguous %q images in region %q: no bulid order tag configured")
+						return
+					}
+
+					SortImages(images, builddatetag, true)
+				}
+
+				m.Ec2ImageId = images[0].Id
+				wg.Done()
+			}()
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(errch)
+	}()
+	var errs []error
+	for err := range errch {
+		errs = append(errs, err)
+	}
+	return errs
+}
 
 type Instances struct {
 	M   LaunchManifest
@@ -231,55 +287,59 @@ func GuessSecurityGroup(s string) awsec2.SecurityGroup {
 // create LaunchManifests from the given ULMs. the manifests are given the
 // provided session id and, if the ULM does not specify a ec2 key name, the
 // provided keyname as well.
-func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, umfts []ULM) ([]LaunchManifest, error) {
+func BuildSystemLaunchManifests(auth aws.Auth, sessionId SessionId, umfts []ULM) ([]LaunchManifest, error) {
 	mfts := make([]LaunchManifest, len(umfts))
+	msByRegion := groupUlmsByRegion(umfts)
+	for r, umfts := range msByRegion {
+		ec2 := awsec2.New(auth, r)
+		// get real security groups.
+		var ambigsgs []awsec2.SecurityGroup
+		for i := range umfts {
+			ambigsgs = append(ambigsgs, umfts[i].Ec2SecGroups...)
+		}
+		secgroups, err := LookupSecurityGroups(ec2, ambigsgs, umfts)
+		if err != nil {
+			return nil, fmt.Errorf("error locating up security groups: %v", err)
+		}
 
-	// get real security groups.
-	var ambigsgs []awsec2.SecurityGroup
-	for i := range umfts {
-		ambigsgs = append(ambigsgs, umfts[i].Ec2SecGroups...)
-	}
-	secgroups, err := LookupSecurityGroups(ec2, ambigsgs, umfts)
-	if err != nil {
-		return nil, fmt.Errorf("error locating up security groups: %v", err)
-	}
+		// get key pairs TODO
 
-	// get key pairs TODO
-
-	// build each LaunchManifest
-	for i := range umfts {
-		m := &mfts[i]
-		um := &umfts[i]
-		m.SessionId = sessionId
-		m.Name = um.Name
-		m.Min = um.Min
-		m.Max = um.Max
-		m.Ec2.InstanceType = um.Ec2InstanceType
-		m.Ec2.ImageId = um.Ec2ImageId
-		m.Ec2.KeyName = um.Ec2KeyName
-		var sgs []awsec2.SecurityGroup
-		for _, group := range um.Ec2SecGroups {
-			found := false
-			for _, info := range secgroups {
-				if info.Id == group.Id {
-					sgs = append(sgs, info.SecurityGroup)
-					found = true
-				} else if info.Name == group.Name {
-					sgs = append(sgs, info.SecurityGroup)
-					found = true
+		// build each LaunchManifest
+		for i := range umfts {
+			m := &mfts[i]
+			um := umfts[i]
+			m.SessionId = sessionId
+			m.Name = um.Name
+			m.Min = um.Min
+			m.Max = um.Max
+			m.Ec2.Region = um.Ec2Region
+			m.Ec2.InstanceType = um.Ec2InstanceType
+			m.Ec2.ImageId = um.Ec2ImageId
+			m.Ec2.KeyName = um.Ec2KeyName
+			var sgs []awsec2.SecurityGroup
+			for _, group := range um.Ec2SecGroups {
+				found := false
+				for _, info := range secgroups {
+					if info.Id == group.Id {
+						sgs = append(sgs, info.SecurityGroup)
+						found = true
+					} else if info.Name == group.Name {
+						sgs = append(sgs, info.SecurityGroup)
+						found = true
+					}
+				}
+				if !found {
+					return nil, fmt.Errorf("unknown security group: %q", group)
 				}
 			}
-			if !found {
-				return nil, fmt.Errorf("unknown security group: %q", group)
-			}
+			m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, sgs...)
 		}
-		m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, sgs...)
 	}
 
 	return mfts, nil
 }
 
-func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []awsec2.SecurityGroup, mfts []ULM) ([]awsec2.SecurityGroupInfo, error) {
+func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []awsec2.SecurityGroup, mfts []*ULM) ([]awsec2.SecurityGroupInfo, error) {
 	var groups []awsec2.SecurityGroup
 	groups = append(groups, secgroups...)
 	for i := range mfts {
@@ -294,11 +354,22 @@ func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []awsec2.SecurityGroup, mft
 	return resp.Groups, nil
 }
 
+// TODO replace with _ManifestNeedingImageLookup
 func ManifestsNeedingImageLookup(ulms []ULM) []*ULM {
 	var _ulms []*ULM
 	for i := range ulms {
 		if ulms[i].Ec2ImageId == "" {
 			_ulms = append(_ulms, &ulms[i])
+		}
+	}
+	return _ulms
+}
+
+func _ManifestsNeedingImageLookup(ulms []*ULM) []*ULM {
+	var _ulms []*ULM
+	for i := range ulms {
+		if ulms[i].Ec2ImageId == "" {
+			_ulms = append(_ulms, ulms[i])
 		}
 	}
 	return _ulms
@@ -372,6 +443,7 @@ func (s imgsort) Swap(i, j int) {
 type ULM struct {
 	Name            string                 // OTI name that can be used to filter images
 	LatestBuild     bool                   // if no image specified use the latest built with matching tags
+	Ec2Region       aws.Region             // AWS region to launch images in
 	Ec2ImageId      string                 // AWS EC2 image id.
 	Ec2InstanceType string                 // AWS EC2 instance type.
 	Ec2KeyName      string                 // AWS EC2 key pair name
@@ -423,6 +495,7 @@ func ParseUserLaunchManifest(defRegion aws.Region, defKeyname string, defSecgrou
 		ulm.Min, ulm.Max = 1, 1
 		ulm.Ec2InstanceType = "t1.micro"
 		ulm.LatestBuild = true
+		ulm.Ec2Region = defRegion
 		ulm.Ec2KeyName = defKeyname
 		ulm.Ec2SecGroups = append([]awsec2.SecurityGroup{}, defSecgroups...)
 
@@ -545,6 +618,7 @@ type LaunchManifest struct {
 	Min, Max  int       // configured by the user
 	SessionId SessionId // generated at runtime
 	Ec2       struct {
+		Region         aws.Region             // configured by the user
 		ImageId        string                 // located AWS image id
 		InstanceType   string                 // configured by the user
 		KeyName        string                 // configured by the user or generated at run-time
