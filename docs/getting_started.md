@@ -114,7 +114,10 @@ recent timestamp is selected.
 
 #Example oticonfig
 
-To complete the guide, the example configuration described above is presented here.
+To complete the guide, the example
+[oticonfig](http://godoc.org/github.com/bmatsuo/oti/oticonfig#C) described
+above is presented here.  By default oti lookes for this configuration in at
+`./oti.json`.
 
     {
         "Ec2": {
