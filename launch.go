@@ -44,15 +44,6 @@ var launch = otisub.Register("launch", func(args []string) {
 	fs.Parse(args)
 	args = fs.Args()
 
-	umfts, err := ParseUserLaunchManifest(args)
-	if err != nil {
-		Log.Fatal(err)
-	}
-
-	if len(umfts) == 0 {
-		Log.Fatal("no manifests")
-	}
-
 	awsregion := aws.Regions[*region]
 	if awsregion.Name == "" {
 		Log.Fatal("unknown ec2 region %q", *region)
@@ -66,13 +57,20 @@ var launch = otisub.Register("launch", func(args []string) {
 	if keyname == "" {
 		keyname = Config.Ec2KeyName(awsregion)
 	}
-	secgroups := Config.Ec2SecurityGroups(awsregion)
-	secgroups = append(secgroups, func() []awsec2.SecurityGroup {
-		if *_secgroups == "" {
-			return nil
-		}
-		return GuessSecurityGroups(strings.Split(*_secgroups, ","))
-	}()...)
+
+	defsgs := Config.Ec2SecurityGroups(awsregion)
+	if *_secgroups != "" {
+		defsgs = append(defsgs, GuessSecurityGroups(strings.Split(*_secgroups, ","))...)
+	}
+
+	umfts, err := ParseUserLaunchManifest(awsregion, keyname, defsgs, args)
+	if err != nil {
+		Log.Fatal(err)
+	}
+
+	if len(umfts) == 0 {
+		Log.Fatal("no manifests")
+	}
 
 	ec2 := awsec2.New(awsauth, awsregion)
 
@@ -126,7 +124,7 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Println("session id: ", sessionId)
 	}
 
-	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, keyname, secgroups, umfts)
+	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, umfts)
 	if err != nil {
 		Log.Fatalln(err)
 	}
@@ -233,29 +231,17 @@ func GuessSecurityGroup(s string) awsec2.SecurityGroup {
 // create LaunchManifests from the given ULMs. the manifests are given the
 // provided session id and, if the ULM does not specify a ec2 key name, the
 // provided keyname as well.
-func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, defaultSecgroups []awsec2.SecurityGroup, umfts []ULM) ([]LaunchManifest, error) {
+func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, umfts []ULM) ([]LaunchManifest, error) {
 	mfts := make([]LaunchManifest, len(umfts))
 
 	// get real security groups.
-	secgroups, err := LookupSecurityGroups(ec2, defaultSecgroups, umfts)
+	var ambigsgs []awsec2.SecurityGroup
+	for i := range umfts {
+		ambigsgs = append(ambigsgs, umfts[i].Ec2SecGroups...)
+	}
+	secgroups, err := LookupSecurityGroups(ec2, ambigsgs, umfts)
 	if err != nil {
 		return nil, fmt.Errorf("error locating up security groups: %v", err)
-	}
-	_defaultSecgroups := make([]awsec2.SecurityGroup, len(defaultSecgroups))
-	for i, group := range defaultSecgroups {
-		for _, info := range secgroups {
-			sg := info.SecurityGroup
-			if sg.Id == group.Id {
-				_defaultSecgroups[i] = sg
-				continue
-			} else if sg.Name == group.Name {
-				_defaultSecgroups[i] = sg
-				continue
-			}
-		}
-		if _defaultSecgroups[i].Id == "" {
-			return nil, fmt.Errorf("unknown default security group %#v", group)
-		}
 	}
 
 	// get key pairs TODO
@@ -271,18 +257,15 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 		m.Ec2.InstanceType = um.Ec2InstanceType
 		m.Ec2.ImageId = um.Ec2ImageId
 		m.Ec2.KeyName = um.Ec2KeyName
-		if m.Ec2.KeyName == "" {
-			m.Ec2.KeyName = keyname
-		}
-		m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, _defaultSecgroups...)
+		var sgs []awsec2.SecurityGroup
 		for _, group := range um.Ec2SecGroups {
 			found := false
 			for _, info := range secgroups {
-				if info.Id == group {
-					m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, info.SecurityGroup)
+				if info.Id == group.Id {
+					sgs = append(sgs, info.SecurityGroup)
 					found = true
-				} else if info.Name == group {
-					m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, info.SecurityGroup)
+				} else if info.Name == group.Name {
+					sgs = append(sgs, info.SecurityGroup)
 					found = true
 				}
 			}
@@ -290,6 +273,7 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 				return nil, fmt.Errorf("unknown security group: %q", group)
 			}
 		}
+		m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, sgs...)
 	}
 
 	return mfts, nil
@@ -299,7 +283,7 @@ func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []awsec2.SecurityGroup, mft
 	var groups []awsec2.SecurityGroup
 	groups = append(groups, secgroups...)
 	for i := range mfts {
-		groups = append(groups, GuessSecurityGroups(mfts[i].Ec2SecGroups)...)
+		groups = append(groups, mfts[i].Ec2SecGroups...)
 	}
 
 	resp, err := ec2.SecurityGroups(groups, nil)
@@ -386,13 +370,13 @@ func (s imgsort) Swap(i, j int) {
 
 // User Launch Manifest -- information read from the command line
 type ULM struct {
-	Name            string   // OTI name that can be used to filter images
-	LatestBuild     bool     // if no image specified use the latest built with matching tags
-	Ec2ImageId      string   // AWS EC2 image id.
-	Ec2InstanceType string   // AWS EC2 instance type.
-	Ec2KeyName      string   // AWS EC2 key pair name
-	Ec2SecGroups    []string // Security groups to assign the instances
-	Min, Max        int      // may not be empty
+	Name            string                 // OTI name that can be used to filter images
+	LatestBuild     bool                   // if no image specified use the latest built with matching tags
+	Ec2ImageId      string                 // AWS EC2 image id.
+	Ec2InstanceType string                 // AWS EC2 instance type.
+	Ec2KeyName      string                 // AWS EC2 key pair name
+	Ec2SecGroups    []awsec2.SecurityGroup // Security groups to assign the instances
+	Min, Max        int                    // may not be empty
 }
 
 type ArgumentError struct {
@@ -417,7 +401,7 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 //	ami              ""
 //	keyname          ""
 //	secgroup         ""
-func ParseUserLaunchManifest(args []string) ([]ULM, error) {
+func ParseUserLaunchManifest(defRegion aws.Region, defKeyname string, defSecgroups []awsec2.SecurityGroup, args []string) ([]ULM, error) {
 	ulms := make([]ULM, 0, len(args))
 	sepseq := "--"
 
@@ -439,6 +423,8 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 		ulm.Min, ulm.Max = 1, 1
 		ulm.Ec2InstanceType = "t1.micro"
 		ulm.LatestBuild = true
+		ulm.Ec2KeyName = defKeyname
+		ulm.Ec2SecGroups = append([]awsec2.SecurityGroup{}, defSecgroups...)
 
 		retErr := func(err error) (ULM, []string, error) {
 			return ULM{}, nil, err
@@ -499,7 +485,7 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 					}
 				}
 			case "secgroup":
-				ulm.Ec2SecGroups = vs
+				ulm.Ec2SecGroups = append(ulm.Ec2SecGroups, GuessSecurityGroups(vs)...)
 			case "ec2type":
 				if numvs > 1 {
 					err = fmt.Errorf("specified multiple times")
