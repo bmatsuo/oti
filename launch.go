@@ -116,45 +116,27 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatalln(err)
 	}
 
-	var haserrors bool
-	done := new(sync.WaitGroup)
-	ich := make(chan Instances)
-	_ich := make(chan []Instances, 1)
-	for _, m := range mfts {
-		m := m
-		done.Add(1)
-		go func(m LaunchManifest) {
-			if DEBUG {
-				Log.Printf("launching manifest %#v", m)
-			}
-			ec2 := awsec2.New(awsauth, m.Ec2.Region)
-			RunInstances(ec2, m, ich)
-			done.Done()
-		}(m)
-	}
-	go func() {
-		var _is []Instances
-		defer func() { _ich <- _is; close(_ich) }()
-		for is := range ich {
-			if is.Err != nil {
-				haserrors = true
-				Log.Print(is.Err)
-			} else {
-				_is = append(_is, is)
-				for _, inst := range is.Is {
-					fmt.Printf("%s %s %s\n", is.M.Name, inst.InstanceId, inst.State.Name)
+	isByRegion, errs := LaunchMain(awsauth, mfts)
+	for r, iss := range isByRegion {
+		for _, is := range iss {
+			for _, inst := range is.Is {
+				if is.Err != nil {
+					Log.Printf("error launching %q in region %q: %v",
+						is.M.Name, is.M.Ec2.Region, is.Err)
+				} else {
+					cols := []string{
+						r.Name,
+						is.M.Name,
+						inst.InstanceId,
+						inst.State.Name,
+					}
+					fmt.Println(strings.Join(cols, "\t"))
 				}
 			}
 		}
-	}()
-
-	done.Wait()
-	close(ich)
-	iss := <-_ich
-	_ = iss
-
-	if haserrors {
-		Log.Fatal()
+	}
+	if len(errs) > 0 {
+		Log.Fatal(errs)
 	}
 
 	// wait for instances to boot
@@ -162,6 +144,62 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Fatal("waiting not implemented")
 	}
 })
+
+func LaunchMain(auth aws.Auth, ms []LaunchManifest) (map[aws.Region][]Instances, []error) {
+	var errs []error
+	isByRegion := make(map[aws.Region][]Instances)
+	msByRegion := groupLMsByRegion(ms)
+	ich := make(chan Instances)
+	runwait := new(sync.WaitGroup)
+	for r, ms := range msByRegion {
+		r, ms := r, ms
+		ec2 := awsec2.New(auth, r)
+		for _, m := range ms {
+			m := m
+			runwait.Add(1)
+			go func() {
+				if DEBUG {
+					Log.Printf("launching manifest %#v", m)
+				}
+				RunInstances(ec2, *m, ich)
+				runwait.Done()
+			}()
+		}
+	}
+	collectclose := make(chan struct{})
+	go func() {
+		defer close(collectclose)
+		for is := range ich {
+			r := is.M.Ec2.Region
+			if is.Err != nil {
+				//is.Err = fmt.Errorf("error launching %q in region %q: %v",
+				//	is.M.Name, is.M.Ec2.Region, is.Err)
+				errs = append(errs, is.Err)
+				isByRegion[r] = append(isByRegion[r], is)
+			} else {
+				isByRegion[r] = append(isByRegion[r], is)
+			}
+		}
+	}()
+
+	runwait.Wait()
+	close(ich)
+	<-collectclose
+
+	return isByRegion, errs
+}
+
+func groupLMsByRegion(ms []LaunchManifest) map[aws.Region][]*LaunchManifest {
+	if len(ms) == 0 {
+		return nil
+	}
+	msByRegion := make(map[aws.Region][]*LaunchManifest, len(ms))
+	for i := range ms {
+		region := ms[i].Ec2.Region
+		msByRegion[region] = append(msByRegion[region], &ms[i])
+	}
+	return msByRegion
+}
 
 func groupUlmsByRegion(ms []ULM) map[aws.Region][]*ULM {
 	if len(ms) == 0 {
