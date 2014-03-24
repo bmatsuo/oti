@@ -85,10 +85,47 @@ key pair used to launch the session.
     ...
     ubuntu:~$
 
-Default key pairs and security groups can be declared in the oti configuration
-file.  See [oticonfig](http://godoc.org/github.com/bmatsuo/oti/oticonfig) for
-details.
+When you are done, terminate the instance.
+
+    $ oti terminate -s myservice
+    i-3c4d5e6f shutting-down (was running)
+
+Default key pairs and security groups can be declared in the
+[oticonfig](http://godoc.org/github.com/bmatsuo/oti/oticonfig#Ec2Region) file.
+For details of this example, see the [example oticonfig](#Example_oticonfig).
 
 #Tagging images
 
-TODO
+Without a configuration file oti requires image ids to be explicitly given to
+the lanch command.  If you have image tags configured in your
+[oticonfig](http://godoc.org/github.com/bmatsuo/oti/oticonfig#Images) oti will
+attempt to guess which image to launch when you don supply an explicit image id.
+
+    $ oti launch myservice
+    myservice:475c0202-0c3c-4249-81bd-aae0b783c61d
+    myservice i-0f9e8d7c pending
+    $ oti terminate -s myservice
+    i-5fbb487e shutting-down (was pending)
+
+With the [example oticonfig](#Example_oticonfig) `oti launch` looks for images
+with a "Name" tag equal to "myservice".  If multiple "myservice" images are
+found then the image with the most recent "BuildTime" tag holding the most
+recent timestamp is selected.
+
+#Example oticonfig
+
+To complete the guide, the example configuration described above is presented here.
+
+    {
+        "Ec2": {
+            "Regions": [
+                "RegionName": "us-east-1",
+                "KeyName": "mykp",
+                "SecurityGroups": [{"name":"ssh-only"}]
+            ]
+        },
+        "Images": {
+            "NameTag": "Name",
+            "BuildDateTag": "BuildTime"
+        }
+    }
