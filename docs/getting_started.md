@@ -1,12 +1,14 @@
-#Quick Start
-
-**Note** -- the oti commands in this guide cannot be copy-pasted. That might
-cost people money inadvertantly.  To play along get yourself the id of any AMI
-in **us-east-1** (have you looked at
+**Note** -- the oti commands in this guide cannot be copy-pasted directly.
+They also cost money to run (although the instances qualify for the EC2 'free
+tier').  To play along get yourself the id of any AMI in **us-east-1** (have
+you looked at
 [packer](http://www.packer.io/intro/getting-started/build-image.html)?) and
 just replace any `ami-*` values in examples below with your own image ids.  If
-you complete the guide within an hour (which is easy) the cost charges from AWS
-should be under $0.10 (USD).
+you complete the guide within an hour (easy to do) the total charges from AWS
+should be under $0.10 (USD).  Each section should not cost more than $0.03
+(depending on the price of t1.micro instances).
+
+#Quick Start
 
 ##Essentials
 
