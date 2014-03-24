@@ -126,7 +126,7 @@ var launch = otisub.Register("launch", func(args []string) {
 		Log.Println("session id: ", sessionId)
 	}
 
-	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, keyname, strings.Split(*_secgroups, ","), umfts)
+	mfts, err := BuildSystemLaunchManifests(ec2, sessionId, keyname, secgroups, umfts)
 	if err != nil {
 		Log.Fatalln(err)
 	}
@@ -233,13 +233,29 @@ func GuessSecurityGroup(s string) awsec2.SecurityGroup {
 // create LaunchManifests from the given ULMs. the manifests are given the
 // provided session id and, if the ULM does not specify a ec2 key name, the
 // provided keyname as well.
-func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, ambigSecgroups []string, umfts []ULM) ([]LaunchManifest, error) {
+func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname string, defaultSecgroups []awsec2.SecurityGroup, umfts []ULM) ([]LaunchManifest, error) {
 	mfts := make([]LaunchManifest, len(umfts))
 
 	// get real security groups.
-	secgroups, err := LookupSecurityGroups(ec2, ambigSecgroups, umfts)
+	secgroups, err := LookupSecurityGroups(ec2, defaultSecgroups, umfts)
 	if err != nil {
 		return nil, fmt.Errorf("error locating up security groups: %v", err)
+	}
+	_defaultSecgroups := make([]awsec2.SecurityGroup, len(defaultSecgroups))
+	for i, group := range defaultSecgroups {
+		for _, info := range secgroups {
+			sg := info.SecurityGroup
+			if sg.Id == group.Id {
+				_defaultSecgroups[i] = sg
+				continue
+			} else if sg.Name == group.Name {
+				_defaultSecgroups[i] = sg
+				continue
+			}
+		}
+		if _defaultSecgroups[i].Id == "" {
+			return nil, fmt.Errorf("unknown default security group %#v", group)
+		}
 	}
 
 	// get key pairs TODO
@@ -258,6 +274,7 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 		if m.Ec2.KeyName == "" {
 			m.Ec2.KeyName = keyname
 		}
+		m.Ec2.SecurityGroups = append(m.Ec2.SecurityGroups, _defaultSecgroups...)
 		for _, group := range um.Ec2SecGroups {
 			found := false
 			for _, info := range secgroups {
@@ -278,10 +295,10 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 	return mfts, nil
 }
 
-func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []string, mfts []ULM) ([]awsec2.SecurityGroupInfo, error) {
+func LookupSecurityGroups(ec2 *awsec2.EC2, secgroups []awsec2.SecurityGroup, mfts []ULM) ([]awsec2.SecurityGroupInfo, error) {
 	var groups []awsec2.SecurityGroup
+	groups = append(groups, secgroups...)
 	for i := range mfts {
-		secgroups = append(append([]string{}, secgroups...), mfts[i].Ec2SecGroups...)
 		groups = append(groups, GuessSecurityGroups(mfts[i].Ec2SecGroups)...)
 	}
 
