@@ -2,8 +2,8 @@
 
 one time instance
 
-**this is beta software. the oti command and the packages in this repository
-are subject to change without former notice**
+**this is experimental software. the oti command and the packages in this
+repository are subject to change without former notice**
 
 ##Install
 
