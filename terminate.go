@@ -129,8 +129,8 @@ func LocateTargetInstances(ec2 *awsec2.EC2, targets []string, sessiontype string
 	sessionidtag := Config.Ec2Tag(otitag.SessionId)
 
 	filter := awsec2.NewFilter()
-	for i := range targets {
-		filter.Add("tag:"+sessionidtag, targets[i])
+	if len(targets) > 0 {
+		filter.Add("tag:"+sessionidtag, targets...)
 	}
 	if sessiontype != "" {
 		filter.Add("tag-key", sessionidtag)
@@ -161,6 +161,9 @@ func LocateTargetInstances(ec2 *awsec2.EC2, targets []string, sessiontype string
 		resp.Reservations[i].Instances = FilterInstances(FilterInstances(FilterInstances(
 			resp.Reservations[i].Instances,
 			func(inst *awsec2.Instance) bool {
+				if sessiontype == "" {
+					return true
+				}
 				for _, tag := range inst.Tags {
 					if tag.Key == sessionidtag {
 						if SessionId(tag.Value).Type() == sessiontype {
