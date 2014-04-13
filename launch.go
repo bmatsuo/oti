@@ -277,6 +277,7 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 		m.Min = um.Min
 		m.Max = um.Max
 		m.Ec2.InstanceType = um.Ec2InstanceType
+		m.Ec2.SpotBid = um.Ec2SpotBid
 		m.Ec2.UserData = um.Ec2UserData
 		m.Ec2.ImageId = um.Ec2ImageId
 		m.Ec2.KeyName = um.Ec2KeyName
@@ -397,6 +398,7 @@ func (s imgsort) Swap(i, j int) {
 type ULM struct {
 	Name            string   // OTI name that can be used to filter images
 	LatestBuild     bool     // if no image specified use the latest built with matching tags
+	Ec2SpotBid      float64  // AWS EC2 spot bid price.
 	Ec2UserData     string   // AWS EC2 user-data available through the instance metadata API.
 	Ec2ImageId      string   // AWS EC2 image id.
 	Ec2InstanceType string   // AWS EC2 instance type.
@@ -428,6 +430,7 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 //	keyname          ""
 //	secgroup         ""
 //	userdata         ""          will be base64 encoded automatically
+//	spotbid          0.0000      not used if less than or equal to zero
 func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 	ulms := make([]ULM, 0, len(args))
 	sepseq := "--"
@@ -471,7 +474,9 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			}
 
 			switch key {
-			case "min", "max", "userdata", "secgroup", "ami", "keyname", "ec2type", "latest":
+			case "min", "max", "userdata", "secgroup",
+				"ami", "keyname", "ec2type", "latest",
+				"spotbid":
 			default:
 				err := fmt.Errorf("unexpected flag %v", key)
 				return retErr(ulmErr(err))
@@ -508,6 +513,12 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 							err = fmt.Errorf(`cannot be specified with "ami"`)
 						}
 					}
+				}
+			case "spotbid":
+				if numvs > 1 {
+					err = fmt.Errorf("specified multiple times")
+				} else {
+					ulm.Ec2SpotBid, err = strconv.ParseFloat(vs[0], 64)
 				}
 			case "secgroup":
 				ulm.Ec2SecGroups = vs
@@ -579,6 +590,7 @@ type LaunchManifest struct {
 		ImageId        string                 // located AWS image id
 		InstanceType   string                 // configured by the user
 		KeyName        string                 // configured by the user or generated at run-time
+		SpotBid        float64                // configured by the user
 		UserData       string                 // configured by the user
 		SecurityGroups []awsec2.SecurityGroup // configured by the user or created at runtime
 	}
