@@ -26,6 +26,7 @@ import (
 	"github.com/crowdmob/goamz/aws"
 	awsec2 "github.com/crowdmob/goamz/ec2"
 
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"sort"
@@ -186,6 +187,12 @@ func RunInstances(ec2 *awsec2.EC2, m LaunchManifest, c chan<- Instances) {
 	is := Instances{M: m}
 	defer func() { c <- is }()
 
+	var userData []byte
+	if m.Ec2.UserData != "" {
+		enc := base64.StdEncoding
+		userData = make([]byte, enc.EncodedLen(len(m.Ec2.UserData)))
+		base64.StdEncoding.Encode(userData, []byte(m.Ec2.UserData))
+	}
 	runopts := &awsec2.RunInstancesOptions{
 		ImageId:        m.Ec2.ImageId,
 		MinCount:       m.Min,
@@ -193,6 +200,7 @@ func RunInstances(ec2 *awsec2.EC2, m LaunchManifest, c chan<- Instances) {
 		KeyName:        m.Ec2.KeyName,
 		InstanceType:   m.Ec2.InstanceType,
 		SecurityGroups: m.Ec2.SecurityGroups,
+		UserData:       userData,
 	}
 	resp, err := ec2.RunInstances(runopts)
 	if err != nil {
@@ -269,6 +277,7 @@ func BuildSystemLaunchManifests(ec2 *awsec2.EC2, sessionId SessionId, keyname st
 		m.Min = um.Min
 		m.Max = um.Max
 		m.Ec2.InstanceType = um.Ec2InstanceType
+		m.Ec2.UserData = um.Ec2UserData
 		m.Ec2.ImageId = um.Ec2ImageId
 		m.Ec2.KeyName = um.Ec2KeyName
 		if m.Ec2.KeyName == "" {
@@ -388,6 +397,7 @@ func (s imgsort) Swap(i, j int) {
 type ULM struct {
 	Name            string   // OTI name that can be used to filter images
 	LatestBuild     bool     // if no image specified use the latest built with matching tags
+	Ec2UserData     string   // AWS EC2 user-data available through the instance metadata API.
 	Ec2ImageId      string   // AWS EC2 image id.
 	Ec2InstanceType string   // AWS EC2 instance type.
 	Ec2KeyName      string   // AWS EC2 key pair name
@@ -409,7 +419,7 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 // parses a set launch manifest. manifests have the form
 //	name [ flag[=val] ... ] -- ...
 // for reference use the following list of flags and the default values
-//	flag      alias  default
+//	flag      alias  default     notes
 //	min              1
 //	max              1
 //	latest           true
@@ -417,6 +427,7 @@ var ErrEndOfArgs = ArgumentError{-1, fmt.Errorf("no more arguments")}
 //	ami              ""
 //	keyname          ""
 //	secgroup         ""
+//	userdata         ""          will be base64 encoded automatically
 func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 	ulms := make([]ULM, 0, len(args))
 	sepseq := "--"
@@ -460,7 +471,7 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 			}
 
 			switch key {
-			case "min", "max", "secgroup", "ami", "keyname", "ec2type", "latest":
+			case "min", "max", "userdata", "secgroup", "ami", "keyname", "ec2type", "latest":
 			default:
 				err := fmt.Errorf("unexpected flag %v", key)
 				return retErr(ulmErr(err))
@@ -505,6 +516,12 @@ func ParseUserLaunchManifest(args []string) ([]ULM, error) {
 					err = fmt.Errorf("specified multiple times")
 				} else {
 					ulm.Ec2InstanceType = vs[0]
+				}
+			case "userdata":
+				if numvs > 1 {
+					err = fmt.Errorf("specified multiple times")
+				} else {
+					ulm.Ec2UserData = vs[0]
 				}
 			case "ami":
 				if numvs > 1 {
@@ -562,6 +579,7 @@ type LaunchManifest struct {
 		ImageId        string                 // located AWS image id
 		InstanceType   string                 // configured by the user
 		KeyName        string                 // configured by the user or generated at run-time
+		UserData       string                 // configured by the user
 		SecurityGroups []awsec2.SecurityGroup // configured by the user or created at runtime
 	}
 }
