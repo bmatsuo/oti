@@ -26,7 +26,6 @@ import (
 	"github.com/crowdmob/goamz/aws"
 	awsec2 "github.com/crowdmob/goamz/ec2"
 
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"sort"
@@ -189,9 +188,7 @@ func RunInstances(ec2 *awsec2.EC2, m LaunchManifest, c chan<- Instances) {
 
 	var userData []byte
 	if m.Ec2.UserData != "" {
-		enc := base64.StdEncoding
-		userData = make([]byte, enc.EncodedLen(len(m.Ec2.UserData)))
-		base64.StdEncoding.Encode(userData, []byte(m.Ec2.UserData))
+		userData = []byte(m.Ec2.UserData)
 	}
 	runopts := &awsec2.RunInstancesOptions{
 		ImageId:        m.Ec2.ImageId,
